@@ -1,0 +1,12 @@
+bin
+build
+include
+lib
+lib64
+share
+.idea
+.vscode
+pyvenv.cfg
+*.pyc
+*.csv
+*.mat

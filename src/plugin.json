@@ -1,0 +1,25 @@
+{
+  "$schema": "https://go.kicad.org/api/schemas/v1",
+  "identifier": "com.github.tobiglaser.KiPEX",
+  "name": "KiPEX",
+  "description": "",
+  "runtime": {
+    "type": "python",
+    "min_version": "3.10"
+  },
+  "actions": [
+    {
+      "identifier": "KiPEX",
+      "name": "Open KiPEX",
+      "description": "",
+      "show-button": true,
+      "scopes": [
+          "pcb"
+      ],
+      "entrypoint": "main.py",
+      "icons-light": [
+        "icons/icon.png"
+      ]
+    }
+  ]
+}

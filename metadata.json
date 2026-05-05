@@ -1,0 +1,29 @@
+{
+    "$schema": "https://go.kicad.org/pcm/schemas/v2",
+    "name": "Parasitic Extraction",
+    "description": "FastHenry Interface for RL-Extraction",
+    "description_full": "",
+    "identifier": "com.github.tobiglaser.KiPEX",
+    "type": "plugin",
+    "author": {
+        "name": "Tobias Glaser",
+        "contact": {
+            "web": "https://tobiglaser.de",
+            "github": "https://github.com/tobiglaser"
+        }
+    },
+    "license": "GPL-3.0",
+    "resources": {
+        "homepage": "https://github.com/tobiglaser/KiPEX"
+    },
+    "versions": [
+        {
+            "kicad_version": "9.0.0",
+            "runtime": "ipc",
+            "platforms": [
+                "windows",
+                "linux"
+            ]
+        }
+    ]
+}

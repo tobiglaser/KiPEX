@@ -1,0 +1,3 @@
+kicad-python
+wxPython
+engineering_notation
