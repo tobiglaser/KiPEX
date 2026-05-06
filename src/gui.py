@@ -30,7 +30,7 @@ class App(wx.App):
         icon = wx.Icon(bmp)
         self.frame.SetIcon(icon)
         
-        self.splitter = wx.SplitterWindow(self.frame)
+        self.splitter = wx.SplitterWindow(self.frame, style=wx.SP_3D|wx.SP_THIN_SASH|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE)
         self.splitter.SetSashGravity(0.35)
         self.splitter.SetMinimumPaneSize(100)
 

@@ -1,5 +1,6 @@
 import wx
 from typing import Callable
+from platform import system
 
 class Executer:
     class Process(wx.Process):
@@ -53,7 +54,10 @@ class Executer:
         self.freq_counter = 0
 
     def kill_FH(self):
-        self.process.Kill(self.pid, wx.SIGTERM)
+        signal = wx.SIGTERM
+        if system() == "Windows":
+            signal = wx.SIGKILL
+        self.process.Kill(self.pid, signal)
 
     def on_ended(self, event: wx.Event) -> None:
         self.log_area.AppendText("FastHenry stopped\n")

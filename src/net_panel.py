@@ -116,6 +116,7 @@ class NetPanel(wx.Panel):
     def on_sel_net(self, event: wx.Event) -> None:
         warn = " ⚠️"
         sel = self.plot_list.GetSelection()
+        if sel == -1 : return
         all = self.plot_list.GetStrings()
         net = all[sel].removesuffix(warn)
         port = self.portdict[net]

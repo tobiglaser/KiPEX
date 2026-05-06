@@ -1,7 +1,5 @@
 import wx
 import wx.grid
-import wx.lib.agw.aui as aui
-import wx.lib.agw.flatnotebook as fnb
 
 from z_mat import Z_mat
 from engineering_notation import EngUnit
@@ -17,7 +15,6 @@ class ResultsPanel(wx.Panel):
         sizer.Add(self.lb, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.splitters: List[wx.SplitterWindow] = []
-        #self.read()
 
     def read(self, csv: str = "Zc.csv", mat: str = "Zc.mat") -> None:
         self.lb.DeleteAllPages()
@@ -32,10 +29,10 @@ class ResultsPanel(wx.Panel):
         P = z.GetRowPortNames()
 
         for i, freq in enumerate(F):
-            panel = wx.Panel(self)
+            panel = wx.Panel(self.lb)
             self.lb.AddPage(panel, f"{EngUnit(freq, 0,0,'Hz')}")
             bs = wx.BoxSizer()
-            splitter = wx.SplitterWindow(panel)
+            splitter = wx.SplitterWindow(panel, style=wx.SP_3D | wx.SP_THIN_SASH | wx.SP_NO_XP_THEME | wx.SP_LIVE_UPDATE)
             bs.Add(splitter, 1, wx.EXPAND)
             self.splitters.append(splitter)
             splitter.SetSashGravity(0.5)
@@ -72,12 +69,7 @@ class ResultsPanel(wx.Panel):
             ind_t.AutoSize()
             ind_t.SetMinSize(wx.Size(0,0))
             l_tables.append(ind_t)
-            width = panel.GetSize().GetWidth()
-            splitter.Initialize(res_t)
-            splitter.SplitVertically(res_t, ind_t, width // 2)
-            for splitter in self.splitters:
-                splitter.SetSashPosition(width//2)
-            print(width, splitter.GetWindow1().GetSize().GetWidth(), splitter.GetWindow1().GetSize().GetWidth(), splitter.GetSashPosition(), [s.GetSashPosition() for s in self.splitters])
+            splitter.SplitVertically(res_t, ind_t)
             panel.SetSizer(bs)
             panel.Fit()
             panel.Layout()
@@ -85,7 +77,6 @@ class ResultsPanel(wx.Panel):
         def maxize_tables(tables: List[wx.grid.Grid]) -> None:
             col_maxes = []
             for table in tables:
-                #for i in range(table.GetNumberCols()):
                 col_sizes = [table.GetColSize(i) for i in range(table.GetNumberCols())]
                 if not col_maxes:
                     col_maxes = col_sizes
@@ -101,13 +92,8 @@ class ResultsPanel(wx.Panel):
                     table.DisableColResize(col)
 
         maxize_tables([*r_tables, *l_tables])
-        self.Fit()
-        for table in r_tables:
-            table.SetMinSize(table.GetSize())
-        for table in l_tables:
-            table.SetMinSize(table.GetSize())
-        #!for splitter in self.splitters:
-        #!    splitter.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.on_splitter)
+        for splitter in self.splitters:
+            splitter.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.on_splitter)
 
     def on_splitter(self, event: wx.SplitterEvent) -> None:
         pos = event.GetSashPosition()
