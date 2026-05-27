@@ -2,17 +2,14 @@ import wx
 from fh_config import FHConfigDialog
 from typing import Dict, Callable
 from engineering_notation import EngUnit
-
-def emptycb(event: wx.Event):
-    print("placeholder")
-def spincb(event: wx.SpinEvent):
-    print("placeholder")
+from os import path
 
 class ConfigPanel(wx.Panel):
-    def __init__(self, parent: wx.Window, settings: Dict = {}, fh_callback: Callable = print) -> None:
+    def __init__(self, parent: wx.Window, settings: Dict = {}, project_name: str = "", fh_callback: Callable = print, gen_callback: Callable = print) -> None:
         super().__init__(parent=parent)
         self.settings = settings
         self.fh_callback = fh_callback
+        self.gen_callback = gen_callback
         self.running = False
         sizer = wx.StaticBoxSizer(wx.VERTICAL, self, "Configuration:")
         self.SetSizer(sizer)
@@ -41,6 +38,42 @@ class ConfigPanel(wx.Panel):
         inner_freq_sizer.AddSpacer(5)
         inner_freq_sizer.Add(self.spin3, 1, wx.EXPAND | wx.TOP | wx.BOTTOM | wx.RIGHT, 5)
 
+        spice_sizer = wx.StaticBoxSizer(wx.HORIZONTAL, self, "SPICE-Model")
+        inner_spice_sizer = wx.FlexGridSizer(5)
+        inner_spice_sizer.AddGrowableCol(0, 1)
+        inner_spice_sizer.AddGrowableCol(2, 1)
+        inner_spice_sizer.AddGrowableCol(4, 1)
+        sizer.Add(spice_sizer, 0, wx.EXPAND | wx.ALL, 5)
+        spice_sizer.Add(inner_spice_sizer, 1, wx.EXPAND, 5)
+        inner_spice_sizer.Add(wx.StaticText(self, label=""), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
+        inner_spice_sizer.AddStretchSpacer()
+        inner_spice_sizer.Add(wx.StaticText(self, label="Filename"), 1, wx.ALIGN_CENTER | wx.TOP, 5)
+        inner_spice_sizer.AddStretchSpacer()
+        inner_spice_sizer.Add(wx.StaticText(self, label="Frequency"), 1, wx.ALIGN_CENTER | wx.TOP | wx.RIGHT, 5)
+        self.spice_box = wx.CheckBox(self,label="Export")
+        export = self.settings.get("spice", {}).get("gen_spice", False)
+        self.spice_box.SetValue(export)
+        inner_spice_sizer.Add(self.spice_box, 1, wx.TOP | wx.BOTTOM | wx.LEFT | wx.ALIGN_CENTER, 5)
+        inner_spice_sizer.AddSpacer(5)
+        file_name = self.settings.get("spice", {}).get("file_name", "PCB.sub")
+        self.spice_filename_box = wx.ComboBox(self, value=file_name, choices=["PCB.sub"])
+        inner_spice_sizer.Add(self.spice_filename_box, 1, wx.EXPAND | wx.ALL, 5)
+        inner_spice_sizer.AddSpacer(5)
+        freq = self.settings.get("spice", {}).get("frequency", "100kHz")
+        self.spice_freq_box = wx.TextCtrl(self, value=freq, style=wx.TE_RIGHT)
+        inner_spice_sizer.Add(self.spice_freq_box, 1, wx.EXPAND | wx.TOP | wx.BOTTOM | wx.RIGHT, 5)
+
+        inp_sizer = wx.StaticBoxSizer(wx.HORIZONTAL, self, label="FastHenry-Model")
+        sizer.Add(inp_sizer, 0, wx.EXPAND | wx.ALL, 5)
+        fh_file_name = self.settings.get("fh_config", {}).get("file", path.abspath(f"{project_name}.inp"))
+        fh_file_choices = self.settings.get("fh_config", {}).get("last_files", [path.abspath(f"{project_name}.inp")])
+        self.fh_file_box = wx.ComboBox(self,value=fh_file_name, choices=fh_file_choices)
+        inp_sizer.Add(self.fh_file_box, 1, wx.EXPAND | wx.ALL, 5)
+        browse_button = wx.Button(self, label="Browse")
+        inp_sizer.Add(browse_button, 0, wx.TOP | wx.RIGHT | wx.BOTTOM, 5)
+        browse_button.Bind(wx.EVT_BUTTON, self.on_browse)
+
+
         sizer.AddStretchSpacer(1)
 
         bottom_sizer = wx.FlexGridSizer(2)
@@ -52,16 +85,16 @@ class ConfigPanel(wx.Panel):
 
         fila_button = wx.Button(self, label="Filamentization")
         config_fh_button = wx.Button(self, label="Configure FastHenry")
-        gen_button = wx.Button(self, label="Generate .inp only")
+        gen_button = wx.Button(self, label="Generate Model")
         self.run_button = wx.Button(self, label="Start Simulation!")
         bottom_sizer.Add(fila_button, 1, wx.EXPAND | wx.ALL, 5)
         bottom_sizer.Add(config_fh_button, 1, wx.EXPAND | wx.ALL, 5)
         bottom_sizer.Add(gen_button, 1, wx.EXPAND | wx.ALL, 5)
         bottom_sizer.Add(self.run_button, 1, wx.EXPAND | wx.ALL, 5)
-        fila_button.Bind(wx.EVT_BUTTON, emptycb)
+        fila_button.Bind(wx.EVT_BUTTON, self.on_filament)
         fila_button.Disable()
         config_fh_button.Bind(wx.EVT_BUTTON, self.on_config_fh)
-        gen_button.Bind(wx.EVT_BUTTON, emptycb)
+        gen_button.Bind(wx.EVT_BUTTON, self.on_generate)
         self.run_button.Bind(wx.EVT_BUTTON, self.on_run_fh)
 
     def apply_freqs(self) -> None:
@@ -71,7 +104,24 @@ class ConfigPanel(wx.Panel):
         self.settings["freqs"]["str_max"] = self.spin2.GetValue()
         self.settings["freqs"]["max"] = float(EngUnit(self.spin2.GetValue().replace(',', '.'), 3, 0, "Hz"))
         self.settings["freqs"]["ndec"] = self.spin3.GetValue()
-    
+
+    def apply_options(self) -> None:
+        self.settings["spice"] = {}
+        self.settings["spice"]["gen_spice"] = self.spice_box.GetValue()
+        self.settings["spice"]["file_name"] = self.spice_filename_box.GetValue()
+        self.settings["spice"]["frequency"] = self.spice_freq_box.GetValue()
+
+        if not self.settings.get("fh_config"):
+            dialog = FHConfigDialog(self, {})
+            dialog.on_apply(None)
+            self.settings["fh_config"] = dialog.config
+        self.settings["fh_config"]["file"] = self.fh_file_box.GetValue()
+        self.fh_file_box.Append(self.fh_file_box.GetValue())
+        if self.settings["fh_config"].get("last_files"):
+            self.settings["fh_config"]["last_files"].append(self.fh_file_box.GetValue())
+        else:
+            self.settings["fh_config"]["last_files"] = [self.fh_file_box.GetValue()]
+
     def on_config_fh(self, event: wx.Event) -> None:
         dialog = FHConfigDialog(self, self.settings.get("fh_config", {}))
         dialog.ShowModal()
@@ -80,9 +130,15 @@ class ConfigPanel(wx.Panel):
     def on_filament(self, event: wx.Event) -> None:
         print("Placeholder!")
 
+    def on_generate(self, event: wx.Event) -> None:
+        self.apply_freqs()
+        self.apply_options()
+        self.gen_callback()
+
     def on_run_fh(self, event: wx.Event) -> None:
         if not self.running:
             self.apply_freqs()
+            self.apply_options()
             self.fh_callback()
         else:
             dialog = wx.MessageDialog(self, "Are you sure?", "Stop", style=wx.ICON_WARNING | wx.OK | wx.CANCEL)
@@ -90,7 +146,16 @@ class ConfigPanel(wx.Panel):
             if dialog.ShowModal() == wx.ID_OK:
                 self.fh_callback()
 
-            
+    def on_browse(self, event) -> None:
+        dir = path.dirname(self.fh_file_box.GetValue()) or "~"
+        dialog = wx.FileDialog(
+            self,
+            wildcard="*.inp",
+            style=wx.FD_SAVE,
+            defaultDir=dir)
+        dialog.ShowModal()
+        if dialog.GetPath():
+            self.fh_file_box.SetValue(dialog.GetPath())
 
     def set_fh_state(self, state: bool) -> None:
         self.running = state

@@ -59,7 +59,7 @@ class NetPanel(wx.Panel):
         sizer.Add(right_sizer, 1, wx.EXPAND)
         self.SetSizer(sizer)
 
-    def set_net_pads(self, net_pad_dict: dict) -> None:
+    def set_net_pads(self, net_pad_dict: dict[str, list[str]]) -> None:
         self.np_dict = net_pad_dict
         self.net_list.SetItems([net for net in net_pad_dict.keys()])
         self.portdict = {}
@@ -169,7 +169,7 @@ class NetPanel(wx.Panel):
     def on_named(self, event: wx.Event) -> None:
         nets = self.net_list.GetStrings()
         for net in nets:
-            if not net.startswith("Net-(") and not net.startswith("unconnected-("):
+            if net and not net.startswith("Net-(") and not net.startswith("unconnected-("):
                 self.net_list.SetStringSelection(net)
                 self.on_add(None)
 

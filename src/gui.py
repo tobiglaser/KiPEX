@@ -1,12 +1,15 @@
 import wx
 from math import ceil
 from os import path
-from typing import Callable, Dict
+from typing import Callable
 from net_panel import NetPanel
 from config_panel import ConfigPanel
 from results_panel import ResultsPanel
 from fh_runner import Executer
 from fh_config import FHConfigDialog
+from translator import Translator
+from z_mat import Z_mat
+from engineering_notation import EngUnit
 
 
 #def Error(message: str):
@@ -17,11 +20,16 @@ from fh_config import FHConfigDialog
 
 
 class App(wx.App):
-    def __init__(self, redirect=False, filename=None, useBestVisual=False, clearSigInt=True, settings: Dict = {}):
+    def __init__(self, redirect=False, filename=None, useBestVisual=False, clearSigInt=True, project_name: str = "", settings: dict = {}):
         self.settings = settings
+        self.project_name = project_name
         super().__init__(redirect, filename, useBestVisual, clearSigInt)
     def OnInit(self):
-        self.frame = wx.Frame(parent=None, title='KiPEX')
+        if self.project_name:
+            title = f"KiPEX – {self.project_name}"
+        else:
+            title = "KiPEX"
+        self.frame = wx.Frame(parent=None, title=title or 'KiPEX')
         script_dir = path.dirname(path.abspath(__file__))
         png_path = path.join(script_dir, 'icons', 'icon.png')
         if not path.exists(png_path):
@@ -50,7 +58,7 @@ class App(wx.App):
         net_page.SetSizer(net_sizer)
         self.net_panel = NetPanel(net_page)
         net_sizer.Add(self.net_panel, 10, wx.EXPAND | wx.ALL, 10)
-        self.config_panel = ConfigPanel(net_page, self.settings, self.on_run_fh)
+        self.config_panel = ConfigPanel(net_page, self.settings, self.project_name, self.on_run_fh, self.on_generate)
         net_sizer.Add(self.config_panel, 5, wx.EXPAND | wx.ALL, 10)
         self.notebook.AddPage(net_page, "From Nets", True)
 
@@ -82,9 +90,12 @@ class App(wx.App):
         self.MainLoop()
         pass
 
-    def set_net_pads(self, net_pad_dict: Dict) -> None:
+    def set_net_pads(self, net_pad_dict: dict[str, list[str]]) -> None:
         self.net_panel.set_net_pads(net_pad_dict)
 
+
+    def set_translator(self, translator: Translator):
+        self.translator = translator
 
     def on_run_fh(self) -> None:
         if not self.fh_running:
@@ -102,6 +113,28 @@ class App(wx.App):
         else:
             self.fh_runner.kill_FH()
 
+    def on_generate(self) -> None:
+        self.translator.reset()
+        nets = self.net_panel.plot_list.GetStrings()
+        for net in nets:
+            source = self.net_panel.portdict[net]["source"]
+            sink   = self.net_panel.portdict[net]["sink"]
+            self.translator.add_port_from_netpanel(source, sink, net)
+        
+        self.translator.set_frequency_range(self.settings["freqs"]["min"], self.settings["freqs"]["max"], self.settings["freqs"]["ndec"])
+        self.translator.translate()
+        file_name = self.settings["fh_config"]["file"]
+        if path.exists(file_name):
+            mb = wx.MessageDialog(
+                self.frame,
+                f'File already exists:\n"{path.abspath(file_name)}"\nOverwrite?',
+                "Overwrite existing File?",
+                style=wx.YES_NO | wx.NO_DEFAULT)
+            result = mb.ShowModal()
+            if result != wx.ID_YES:
+                return
+        with open(file_name, 'w') as file:
+            self.translator.export(file)
 
 
     def on_fh_state(self, running: bool, state: str = "messy") -> None:
@@ -115,6 +148,20 @@ class App(wx.App):
                 if self.notebook.GetPage(page) == self.results_page:
                     self.notebook.SetSelection(page)
                     break
+            if state=="clean" and self.config_panel.spice_box.GetValue():
+                z = Z_mat(file + ".csv", file + ".mat")
+                filename = self.config_panel.spice_filename_box.GetValue()
+                frequency = float(EngUnit(self.config_panel.spice_freq_box.GetValue()))
+                if path.exists(filename):
+                    mb = wx.MessageDialog(
+                        self.frame,
+                        f'File already exists:\n"{path.abspath(filename)}"\nOverwrite?',
+                        "Overwrite existing File?",
+                        style=wx.YES_NO | wx.NO_DEFAULT)
+                    result = mb.ShowModal()
+                    if result != wx.ID_YES:
+                        return
+                z.export_spice(filename, frequency)
 
     # def set_layers(self, layers: list) -> None:
     #     self.layer_list.Set(layers)

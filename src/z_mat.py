@@ -1,10 +1,12 @@
-from typing import Tuple, List
-from math import pi
+from math import pi, sqrt
+from spice_generator import generate_spice
+from engineering_notation import EngUnit
 
 class Z_mat:
     def __init__(self, csv_path, mat_path):
         self.read_ports(mat_path)
         self.read_imps(csv_path)
+        self.calculate_coupling()
 
     def read_imps(self, csv_path: str) -> None:
         self.res = []
@@ -60,7 +62,7 @@ class Z_mat:
                     self.ports = ports
                     return
 
-    def parse_impedance_line(self, line: str) -> Tuple[float, List[Tuple[float, float]]]:
+    def parse_impedance_line(self, line: str) -> tuple[float, list[tuple[float, float]]]:
         entries = line.split()
         freq = float(entries[0])
         i = 1
@@ -72,16 +74,42 @@ class Z_mat:
             i += 2
         return freq, imps
 
-    def GetResistance(self):
+    def calculate_coupling(self) -> None:
+        L = self.ind
+        self.K = []
+        for f, freq in enumerate(self.freqs):
+            K_f = []
+            for i, L_i in enumerate(L[f]):
+                K_i = []
+                for j, L_ij in enumerate(L_i):
+                    k_ij = abs(L_ij) / sqrt(L[f][i][i] * L[f][j][j])
+                    K_i.append(k_ij)
+                K_f.append(K_i)
+            self.K.append(K_f)
+
+    def GetResistance(self) -> list[list[list[float]]]:
         return self.res
-    def GetInductance(self):
+    def GetInductance(self) -> list[list[list[float]]]:
         return self.ind
-    def GetFrequencies(self):
+    def GetFrequencies(self) -> list[float]:
         return self.freqs
-    def GetRowPortNames(self):
+    def GetRowPortNames(self) -> list[str]:
         return self.ports
+    def GetCoupling(self) -> list[list[list[float]]]:
+        return self.K
 
 
+    def export_spice(self, file_name: str, target_frequency: float) -> None:
+        index = 0
+        smallest_difference = 1e9
+        for i, f in enumerate(self.freqs):
+            if abs(target_frequency - f) < smallest_difference:
+                smallest_difference = abs(target_frequency - f)
+                index = i
+                if smallest_difference == 0:
+                    break
+        comment = f"Generated with KiPEX at f={EngUnit(self.freqs[index], 2, 0, 'Hz')}"
+        generate_spice(file_name, self.ports, self.res[index], self.ind[index], self.K[index], comment=comment)
 
 
 

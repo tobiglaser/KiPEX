@@ -1,6 +1,7 @@
 import wx
 from typing import Callable
 from platform import system
+from time import perf_counter
 
 class Executer:
     class Process(wx.Process):
@@ -46,6 +47,7 @@ class Executer:
 
     def run_FH(self, command: str) -> None:
         self.timer.Start(100)
+        self.start_time = perf_counter()
         self.state_callback(True, "started")
         self.process = self.Process(self.parent, self.timer, self.on_timer)
         self.pid = wx.Execute(command, callback=self.process)
@@ -60,7 +62,9 @@ class Executer:
         self.process.Kill(self.pid, signal)
 
     def on_ended(self, event: wx.Event) -> None:
-        self.log_area.AppendText("FastHenry stopped\n")
+        self.stop_time = perf_counter()
+        self.log_area.AppendText("FastHenry stopped ")
+        self.log_area.AppendText(f"after {self.stop_time - self.start_time:.1f}s\n")
         self.log_area.AppendText("Exit code: " + str(self.process.exit_code) + "\n")
         state = "messy"
         if self.process.exit_code == 0:

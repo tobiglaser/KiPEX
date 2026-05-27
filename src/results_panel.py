@@ -16,6 +16,13 @@ class ResultsPanel(wx.Panel):
         self.SetSizer(sizer)
         self.splitters: List[wx.SplitterWindow] = []
 
+        if wx.SystemSettings.GetAppearance().IsDark:
+            self.off_color_res = wx.Colour(105, 105, 105)
+            self.off_color_ind = wx.Colour(173, 173, 173)
+        else:
+            self.off_color_res = wx.Colour(150, 150, 150)
+            self.off_color_ind = wx.Colour(82, 82, 82)
+
     def read(self, csv: str = "Zc.csv", mat: str = "Zc.mat") -> None:
         self.lb.DeleteAllPages()
         self.splitters.clear()
@@ -48,7 +55,7 @@ class ResultsPanel(wx.Panel):
                     res_t.SetCellValue(j, k, str(EngUnit(res, 3, 0, 'Ω')))
                     res_t.SetCellAlignment(j, k, wx.ALIGN_RIGHT, wx.ALIGN_CENTER)
                     if not j == k:
-                        res_t.SetCellTextColour(j, k, wx.Colour(105, 105, 105))
+                        res_t.SetCellTextColour(j, k, self.off_color_res)
                     res_t.SetReadOnly(j, k)
             res_t.AutoSize()
             res_t.SetMinSize(wx.Size(0,0))
@@ -64,7 +71,7 @@ class ResultsPanel(wx.Panel):
                     ind_t.SetCellValue(j, k, str(EngUnit(ind, 3, 0, 'H')))
                     ind_t.SetCellAlignment(j, k, wx.ALIGN_RIGHT, wx.ALIGN_CENTER)
                     if not j == k:
-                        ind_t.SetCellTextColour(j, k, wx.Colour(173, 173, 173))
+                        ind_t.SetCellTextColour(j, k, self.off_color_ind)
                     ind_t.SetReadOnly(j, k)
             ind_t.AutoSize()
             ind_t.SetMinSize(wx.Size(0,0))

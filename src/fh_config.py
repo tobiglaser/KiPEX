@@ -23,6 +23,9 @@ class FHConfigDialog(wx.Dialog):
         browse_button = wx.Button(self, label="Browse")
         browse_button.Bind(wx.EVT_BUTTON, self.on_browse)
         fs.Add(browse_button, 0, wx.BOTTOM | wx.TOP, 10)
+        # This now lives in the ConfigPanel, keeping it for FH2 UX
+        browse_button.Disable()
+        self.file_name.Disable()
         
         fs.AddStretchSpacer(5)
 
@@ -171,7 +174,7 @@ class FHConfigDialog(wx.Dialog):
 
     def on_apply(self, event) -> None:
         config = {}
-        config["file"] = self.file_name.GetValue()
+        #config["file"] = self.file_name.GetValue()
         config["options"] = {}
         for option in self.options.values():
             if option["check"].GetValue() and option.get("field"):

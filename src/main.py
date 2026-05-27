@@ -1,7 +1,10 @@
 import os
 from kipy import KiCad
+from kipy.proto.board.board_types_pb2 import BoardLayer
+from kipy.board_types import Pad
 import json
 from gui import App
+from translator import Translator
 
 from util import ensure_fasthenry_path, ensure_settings_exist
 
@@ -10,6 +13,7 @@ if __name__ == "__main__":
     settings_dir = kicad.get_plugin_settings_path("com_github_tobiglaser_kipex")
     working_dir = kicad.get_project(kicad.get_board().document).path
     working_dir = os.path.join(working_dir, "KiPEX")
+    project_title = kicad.get_project(kicad.get_board().document).name
     print(working_dir)
     if not os.path.exists(working_dir):
         os.mkdir(working_dir)
@@ -25,23 +29,50 @@ if __name__ == "__main__":
     nets = board.get_nets()
     pads = board.get_pads()
     fp_instances = board.get_footprints()
-    net_pad_name_dict = {}
-    pads_by_id = {}
-    pad_id_by_name = {}
-    pad_name_by_id = {}
+    net_pad_name_dict: dict[str, list[str]] = {}
+    pads_by_id: dict[str, Pad] = {}
+    pad_id_by_name: dict[str, str] = {}
+    pad_names_by_id: dict[str, list[str]] = {}
+    pad_by_name: dict[str, Pad] = {}
+    for net in nets:
+        net_pad_name_dict[net.name] = []
     for fpi in fp_instances:
         for pad in fpi.definition.pads:
             fp_name = fpi.reference_field.text.value
             if not fp_name:
                 fp_name = "None"
-            pad_name = f"{fp_name}-{pad.number}"
-            pad_id_by_name[pad_name] = pad.id.value
-            pad_name_by_id[pad.id.value] = pad_name
+            #pad_name = f"{fp_name}-{pad.number}"
+            #pad_id_by_name[pad_name] = pad.id.value
+            #pad_name_by_id[pad.id.value] = pad_name
 
-    for net in nets:
-        net_pad_name_dict[net.name] = []
+            layers = pad.padstack.layers
+            pad_names_by_id[pad.id.value] = []
+            if BoardLayer.BL_F_Cu in layers and BoardLayer.BL_B_Cu in layers:
+                # front and back
+                pad_name = f"{fp_name}-{pad.number} (Front)"
+                pad_id_by_name[pad_name] = pad.id.value
+                pad_names_by_id[pad.id.value].append(pad_name)
+                pad_by_name[pad_name] = pad
+                net_pad_name_dict[pad.net.name].append(pad_name)
+                pad_name = f"{fp_name}-{pad.number} (Back)"
+                pad_id_by_name[pad_name] = pad.id.value
+                pad_names_by_id[pad.id.value].append(pad_name)
+                net_pad_name_dict[pad.net.name].append(pad_name)
+                pad_by_name[pad_name] = pad
+                pass
+            else:
+                pad_name = f"{fp_name}-{pad.number}"
+                pad_id_by_name[pad_name] = pad.id.value
+                if BoardLayer.BL_F_Cu in layers:
+                    layer = BoardLayer.BL_F_Cu
+                else:
+                    layer = BoardLayer.BL_B_Cu
+                pad_names_by_id[pad.id.value].append(pad_name)
+                net_pad_name_dict[pad.net.name].append(pad_name)
+                pad_by_name[pad_name] = pad
+                pass
+
     for pad in pads:
-        net_pad_name_dict[pad.net.name].append(pad_name_by_id[pad.id.value])
         pads_by_id[pad.id.value] = pad
         print(pad)
 
@@ -54,12 +85,16 @@ if __name__ == "__main__":
         net_pad_name_dict.pop(key)
         print("removed ", key)
 
-    app = App(redirect=True, settings=settings)
+    app = App(redirect=True, project_name=project_title, settings=settings)
     ensure_fasthenry_path(settings)
     app.set_net_pads(net_pad_name_dict)
+
+    translator = Translator(board, pad_by_name)
+    app.set_translator(translator)
+
     app.run()
     with open(settings_path, 'w') as settings_file:
-        json.dump(settings, settings_file)
+        settings_file.write(json.dumps(settings, indent=4))
 
 
 
