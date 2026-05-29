@@ -1,10 +1,12 @@
 import os
 from kipy import KiCad
+from kipy.errors import ApiError
 from kipy.proto.board.board_types_pb2 import BoardLayer
 from kipy.board_types import Pad
 import json
 from gui import App
 from translator import Translator
+from api_warning import api_warning
 
 from util import ensure_fasthenry_path, ensure_settings_exist
 
@@ -25,10 +27,15 @@ if __name__ == "__main__":
     with open(settings_path) as settings_file:
         settings = json.load(settings_file)
     
-    board = KiCad().get_board()
-    nets = board.get_nets()
-    pads = board.get_pads()
-    fp_instances = board.get_footprints()
+    try:
+        board = KiCad().get_board()
+        nets = board.get_nets()
+        pads = board.get_pads()
+        fp_instances = board.get_footprints()
+    except ApiError as err:
+        if err.code == 7:
+            api_warning()
+        exit()
     net_pad_name_dict: dict[str, list[str]] = {}
     pads_by_id: dict[str, Pad] = {}
     pad_id_by_name: dict[str, str] = {}

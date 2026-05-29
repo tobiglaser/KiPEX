@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import TextIO
 from math import ceil
 from kipy import KiCad
+from kipy.errors import ApiError
 from kipy.board import Board
 from kipy.board_types import Net, Track, ArcTrack, Zone, Pad
 from kipy.geometry import PolygonWithHoles
@@ -14,6 +15,7 @@ from filaments import get_filament_number
 import shapely
 from quad import Quad, Relation
 from point3d import Point3D
+from api_warning import api_warning
 
 
 class FilamentMode(Enum):
@@ -147,13 +149,20 @@ class Translator():
     def set_filament_mode(self, mode: FilamentMode) -> None:
         self.filament_mode = mode
 
-    def translate(self) -> None:
+    def translate(self) -> str | None:
         """Actually do the thing."""
-        self.stackup()
-        self.zones()
-        self.traces()
-        self.vias()
-        self.ports()
+        try:
+            self.stackup()
+            self.zones()
+            self.traces()
+            self.vias()
+            self.ports()
+        except ApiError as error:
+            if error.code == 7:
+                api_warning()
+                return "API busy"
+            else:
+                raise error
 
     def export(self, file: TextIO, title: str = "Auto generated via KiPEX") -> None:
         file.write(f"*{title}\n")
@@ -326,7 +335,7 @@ class Translator():
 
     @staticmethod
     def polygon_kicad_to_shapely(polygon: PolygonWithHoles, create_holes: bool = True) -> shapely.Polygon:
-        points = [shapely.Point(node.point.x, -node.point.y) for node in polygon.outline.nodes] # extract points
+        points = [shapely.Point(node.point.x, node.point.y) for node in polygon.outline.nodes] # extract points
         points.append(points[0]) # close loop
         lines = [shapely.LineString([points[i], points[i+1]]) for i in range(len(points)-1)]
         polygons = shapely.polygonize(lines).geoms

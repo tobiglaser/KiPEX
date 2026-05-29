@@ -1,9 +1,10 @@
-from math import pi, sqrt
+from math import pi, sqrt, isnan
 from spice_generator import generate_spice
 from engineering_notation import EngUnit
 
 class Z_mat:
     def __init__(self, csv_path, mat_path):
+        self.nan = False
         self.read_ports(mat_path)
         self.read_imps(csv_path)
         self.calculate_coupling()
@@ -68,8 +69,16 @@ class Z_mat:
         i = 1
         imps = []
         while i < len(entries) - 1:
-            res = float(entries[i])
-            x_l = float(entries[i+1].removesuffix("j"))
+            try:
+                res = float(entries[i])
+                x_l = float(entries[i+1].removesuffix("j"))
+                if isnan(res) or isnan(x_l):
+                    self.nan = True
+            except ValueError:
+                # float() should already parse 'nan', but in any other case it is definitely NaN.
+                res = float("NaN")
+                x_l = float("NaN")
+                self.nan = True
             imps.append((res, x_l))
             i += 2
         return freq, imps
@@ -97,6 +106,9 @@ class Z_mat:
         return self.ports
     def GetCoupling(self) -> list[list[list[float]]]:
         return self.K
+    
+    def has_nan(self) -> bool:
+        return self.nan
 
 
     def export_spice(self, file_name: str, target_frequency: float) -> None:

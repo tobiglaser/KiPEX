@@ -117,12 +117,17 @@ class App(wx.App):
         self.translator.reset()
         nets = self.net_panel.plot_list.GetStrings()
         for net in nets:
+            if "⚠️" in net:
+                mb = wx.MessageBox(f'Ensure distinct Ports in net "{net.removesuffix(" ⚠️")}".', "⚠️", wx.OK | wx.CENTER, self.frame)
+                return
             source = self.net_panel.portdict[net]["source"]
             sink   = self.net_panel.portdict[net]["sink"]
             self.translator.add_port_from_netpanel(source, sink, net)
         
         self.translator.set_frequency_range(self.settings["freqs"]["min"], self.settings["freqs"]["max"], self.settings["freqs"]["ndec"])
-        self.translator.translate()
+        error_str = self.translator.translate()
+        if error_str:
+            return
         file_name = self.settings["fh_config"]["file"]
         if path.exists(file_name):
             mb = wx.MessageDialog(

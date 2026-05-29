@@ -15,8 +15,9 @@ class ResultsPanel(wx.Panel):
         sizer.Add(self.lb, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.splitters: List[wx.SplitterWindow] = []
+        self.nan_warning_shown = False
 
-        if wx.SystemSettings.GetAppearance().IsDark:
+        if wx.SystemSettings.GetAppearance().IsDark():
             self.off_color_res = wx.Colour(105, 105, 105)
             self.off_color_ind = wx.Colour(173, 173, 173)
         else:
@@ -80,14 +81,35 @@ class ResultsPanel(wx.Panel):
             panel.SetSizer(bs)
             panel.Fit()
             panel.Layout()
-        
+        if z.has_nan() and not self.nan_warning_shown:
+            self.nan_warning_shown = True
+            wx.CallAfter(
+                wx.MessageBox,
+                "NaN Results are most likely a result of an open loop.",
+                "Warning",
+                wx.OK | wx.ICON_WARNING
+            )
+
+        def autosize_row_labels(grid: wx.grid.Grid):
+            dc = wx.ClientDC(grid)
+            dc.SetFont(grid.GetLabelFont())
+            max_width = 0
+            for row in range(grid.GetNumberRows()):
+                label = grid.GetRowLabelValue(row)
+                width, _ = dc.GetTextExtent(label)
+                if width > max_width:
+                    max_width = width
+            grid.SetRowLabelSize(max_width + 20)
+
         def maxize_tables(tables: List[wx.grid.Grid]) -> None:
             col_maxes = []
             for table in tables:
+                autosize_row_labels(table)
                 col_sizes = [table.GetColSize(i) for i in range(table.GetNumberCols())]
                 if not col_maxes:
                     col_maxes = col_sizes
                 for i, col in enumerate(col_sizes):
+                    table.AutoSizeRowLabelSize(i)
                     if col > col_maxes[i]:
                         col_maxes[i] = col
             for table in tables:

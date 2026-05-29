@@ -1,4 +1,6 @@
 from copy import deepcopy
+from math import isnan
+import re
 
 def generate_spice(file_name: str,
                     net_names: list[str],
@@ -8,6 +10,9 @@ def generate_spice(file_name: str,
                     C: list[list[float]] | None = None,
                     external_gnd: bool = False,
                     comment: str = "") -> None:
+    #ensure alphanumeric net names
+    net_names = [re.sub(r'[^A-Za-z0-9_]', '_', net) for net in net_names]
+    net_names = [re.sub(r'_+', '_', net) for net in net_names]
     with open(file_name, 'w') as file:
         if comment:
             file.write(f"*{comment}\n")
@@ -54,7 +59,7 @@ def generate_spice(file_name: str,
         for i, row in enumerate(K):
             K[i][i] = 0
             for j, k in enumerate(row):
-                if k != 0:
+                if k != 0 and not isnan(k):
                     file.write(f"K{i+1}{j+1}_{j+1}{i+1} L{i+1}{j+1} L{j+1}{i+1} {K[i][j]}\n")
                     K[i][j] = 0
                     K[j][i] = 0
