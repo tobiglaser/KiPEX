@@ -98,6 +98,16 @@ class Equivalence():
         node_strings = [str(node) for node in self.nodes]
         return f".equiv {' '.join(node_strings)}\n"
 
+@dataclass
+class PlatedHole():
+    diameter: int
+    x: int
+    y: int
+    start_layer: BoardLayer.ValueType
+    end_layer: BoardLayer.ValueType
+    conductance: float
+    net: str
+    mode: ViaMode
 
 
 @dataclass
@@ -396,23 +406,49 @@ class Translator():
         """Only very basic vias for now."""
         if not self.is_two_layer() or not self.via_mode == ViaMode.ignore_inner_layers:
             raise Exception("Only two layers with most basic vias implemented.")
+        
+        PHs: list[PlatedHole] = []
+
         for via in self.board.get_vias():
             if not via.net.name in self.nets:
                 continue
             if via.type != ViaType.VT_THROUGH:
                 continue
-            start_layer = via.padstack.drill.start_layer
-            end_layer   = via.padstack.drill.end_layer
-            net = via.net.name
-            x = via.position.x
-            y = via.position.y
-            width = height = via.diameter
-            start_pos = Point3D(x, y, self.zs[start_layer])
-            end_pos   = Point3D(x, y, self.zs[end_layer])
+            ph = PlatedHole(
+                diameter=via.diameter,
+                x=via.position.x,
+                y=via.position.y,
+                start_layer=via.padstack.drill.start_layer,
+                end_layer=via.padstack.drill.end_layer,
+                conductance=self.conductivity,
+                net=via.net.name,
+                mode=self.via_mode
+            )
+            PHs.append(ph)
+
+        for pad in self.board.get_pads():
+            if not pad.net.name in self.nets:
+                continue
+            if pad.pad_type == PadType.PT_PTH:
+                ph = PlatedHole(
+                    diameter=pad.padstack.drill.diameter.x,
+                    x=pad.position.x,
+                    y=pad.position.y,
+                    start_layer=pad.padstack.drill.start_layer,
+                    end_layer=pad.padstack.drill.end_layer,
+                    conductance=self.conductivity,
+                    net=pad.net.name,
+                    mode=self.via_mode
+                )
+                PHs.append(ph)
+
+        for ph in PHs:
+            start_pos = Point3D(ph.x, ph.y, self.zs[ph.start_layer])
+            end_pos   = Point3D(ph.x, ph.y, self.zs[ph.end_layer])
             start_node = self.nodes.get(start_pos)
             end_node   = self.nodes.get(end_pos)
 
-            net_nodes = [n for n in self.nodes.values() if n.net == net]
+            net_nodes = [n for n in self.nodes.values() if n.net == ph.net]
             if not start_node:
                 closest_node = net_nodes[0]
                 closest_distance = 1e9
@@ -422,7 +458,7 @@ class Translator():
                         closest_node = node
                         closest_distance = distance
                 self.node_index += 1
-                start_node = Node(self.node_index, net, start_pos)
+                start_node = Node(self.node_index, ph.net, start_pos)
                 self.nodes[start_pos] = start_node
                 self.eqivs.append(Equivalence([start_node, closest_node]))
             if not end_node:
@@ -434,25 +470,21 @@ class Translator():
                         closest_node = node
                         closest_distance = distance
                 self.node_index += 1
-                end_node = Node(self.node_index, net, end_pos)
+                end_node = Node(self.node_index, ph.net, end_pos)
                 self.nodes[end_pos] = end_node
                 self.eqivs.append(Equivalence([end_node, closest_node]))
             
-            via_conductance = self.conductivity
+            via_conductance = ph.conductance
             #! Vastly underestimating Via resistance with solid copper conductor the size of via diameter.
             self.element_index += 1
             element = Element(
                 self.element_index,
                 start_node,
                 end_node,
-                width,
-                height,
+                ph.diameter,
+                ph.diameter,
                 sigma=via_conductance)
             self.elements[start_node.position, end_node.position] = element
-
-        for pad in self.board.get_pads():
-            if pad.pad_type == PadType.PT_PTH:
-                pass
 
     def ports(self) -> None:
         for pre_port in self.preliminary_ports:
