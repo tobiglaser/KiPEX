@@ -22,6 +22,7 @@ cp -v src/*.py build/plugins/
 cp -v src/requirements.txt build/plugins/requirements.txt
 cp -v src/plugin.json build/plugins/plugin.json
 
+sed build/plugins/version.py -i -e "s/''/'${VERSION}'/"
 
 jq  --arg version $VERSION \
     --arg status $STATUS \

@@ -10,6 +10,7 @@ from fh_config import FHConfigDialog
 from translator import Translator
 from z_mat import Z_mat
 from engineering_notation import EngUnit
+from version import build_version
 
 
 #def Error(message: str):
@@ -26,9 +27,9 @@ class App(wx.App):
         super().__init__(redirect, filename, useBestVisual, clearSigInt)
     def OnInit(self):
         if self.project_name:
-            title = f"KiPEX – {self.project_name}"
+            title = f"KiPEX{' ' if build_version else ''}{build_version} – {self.project_name}"
         else:
-            title = "KiPEX"
+            title = f"KiPEX{' ' if build_version else ''}{build_version}"
         self.frame = wx.Frame(parent=None, title=title or 'KiPEX')
         script_dir = path.dirname(path.abspath(__file__))
         png_path = path.join(script_dir, 'icons', 'icon.png')
