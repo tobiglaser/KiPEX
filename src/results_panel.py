@@ -3,7 +3,7 @@ import wx.grid
 
 from z_mat import Z_mat
 from engineering_notation import EngUnit
-from typing import List
+from math import isnan
 
 
 class ResultsPanel(wx.Panel):
@@ -14,7 +14,7 @@ class ResultsPanel(wx.Panel):
         sizer = wx.BoxSizer()
         sizer.Add(self.lb, 1, wx.EXPAND)
         self.SetSizer(sizer)
-        self.splitters: List[wx.SplitterWindow] = []
+        self.splitters: list[wx.SplitterWindow] = []
         self.nan_warning_shown = False
 
         if wx.SystemSettings.GetAppearance().IsDark():
@@ -53,7 +53,10 @@ class ResultsPanel(wx.Panel):
                 res_t.SetRowLabelValue(j, port)
             for j, row in enumerate(R[i]):
                 for k, res in enumerate(row):
-                    res_t.SetCellValue(j, k, str(EngUnit(res, 3, 0, 'Ω')))
+                    if not isnan(res):
+                        res_t.SetCellValue(j, k, str(EngUnit(res, 3, 0, 'Ω')))
+                    else:
+                        res_t.SetCellValue(j, k, "NaN")
                     res_t.SetCellAlignment(j, k, wx.ALIGN_RIGHT, wx.ALIGN_CENTER)
                     if not j == k:
                         res_t.SetCellTextColour(j, k, self.off_color_res)
@@ -69,7 +72,10 @@ class ResultsPanel(wx.Panel):
                 ind_t.SetRowLabelValue(j, port)
             for j, row in enumerate(L[i]):
                 for k, ind in enumerate(row):
-                    ind_t.SetCellValue(j, k, str(EngUnit(ind, 3, 0, 'H')))
+                    if not isnan(ind): # older EngUnit can not handle NaN implicitly
+                        ind_t.SetCellValue(j, k, str(EngUnit(ind, 3, 0, 'H')))
+                    else:
+                        ind_t.SetCellValue(j, k, "NaN")
                     ind_t.SetCellAlignment(j, k, wx.ALIGN_RIGHT, wx.ALIGN_CENTER)
                     if not j == k:
                         ind_t.SetCellTextColour(j, k, self.off_color_ind)
@@ -101,7 +107,7 @@ class ResultsPanel(wx.Panel):
                     max_width = width
             grid.SetRowLabelSize(max_width + 20)
 
-        def maxize_tables(tables: List[wx.grid.Grid]) -> None:
+        def maxize_tables(tables: list[wx.grid.Grid]) -> None:
             col_maxes = []
             for table in tables:
                 autosize_row_labels(table)

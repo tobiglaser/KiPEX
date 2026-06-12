@@ -121,7 +121,7 @@ class Quad():
             if e_parent:
                 self.neighbours[Direction.E] = e_parent.children.get(Quadrant.NW, e_parent)
         
-        for dir, quad in self.neighbours.items():
+        for dir, quad in list(self.neighbours.items()):
             if quad.relation(self.polygon) == Relation.outside:
                 self.neighbours.pop(dir)
         

@@ -1,6 +1,7 @@
 import wx
 from math import ceil
 from os import path
+import traceback
 from typing import Callable
 from net_panel import NetPanel
 from config_panel import ConfigPanel
@@ -126,8 +127,15 @@ class App(wx.App):
             self.translator.add_port_from_netpanel(source, sink, net)
         
         self.translator.set_frequency_range(self.settings["freqs"]["min"], self.settings["freqs"]["max"], self.settings["freqs"]["ndec"])
-        error_str = self.translator.translate()
+        self.translator.set_quad_limits(self.settings["quad_split"]["upper"], self.settings["quad_split"]["lower"])
+        try:
+            error_str = self.translator.translate()
+        except:
+            error_str = ""
+            tb = traceback.format_exc()
+            self.log_area.AppendText(f"Exception during Generation:\n {tb}\n")
         if error_str:
+            self.log_area.AppendText("Generation Error:\n" + error_str + "\n")
             return
         file_name = self.settings["fh_config"]["file"]
         if path.exists(file_name):

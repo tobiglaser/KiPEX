@@ -21,9 +21,9 @@ class ConfigPanel(wx.Panel):
         inner_freq_sizer.AddGrowableCol(4, 1)
         sizer.Add(freq_sizer, 0, wx.EXPAND | wx.ALL, 5)
         freq_sizer.Add(inner_freq_sizer, 1)
-        inner_freq_sizer.Add(wx.StaticText(self, label="fmin"), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
+        inner_freq_sizer.Add(wx.StaticText(self, label="fmin / Hz"), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
         inner_freq_sizer.AddStretchSpacer()
-        inner_freq_sizer.Add(wx.StaticText(self, label="fmax"), 1, wx.ALIGN_CENTER | wx.TOP, 5)
+        inner_freq_sizer.Add(wx.StaticText(self, label="fmax / Hz"), 1, wx.ALIGN_CENTER | wx.TOP, 5)
         inner_freq_sizer.AddStretchSpacer()
         inner_freq_sizer.Add(wx.StaticText(self, label="ndec"), 1, wx.ALIGN_CENTER | wx.TOP | wx.RIGHT, 5)
         min = self.settings.get("freqs", {}).get("str_min", "100m")
@@ -49,7 +49,7 @@ class ConfigPanel(wx.Panel):
         inner_spice_sizer.AddStretchSpacer()
         inner_spice_sizer.Add(wx.StaticText(self, label="Filename"), 1, wx.ALIGN_CENTER | wx.TOP, 5)
         inner_spice_sizer.AddStretchSpacer()
-        inner_spice_sizer.Add(wx.StaticText(self, label="Frequency"), 1, wx.ALIGN_CENTER | wx.TOP | wx.RIGHT, 5)
+        inner_spice_sizer.Add(wx.StaticText(self, label="Frequency / Hz"), 1, wx.ALIGN_CENTER | wx.TOP | wx.RIGHT, 5)
         self.spice_box = wx.CheckBox(self,label="Export")
         export = self.settings.get("spice", {}).get("gen_spice", False)
         self.spice_box.SetValue(export)
@@ -73,8 +73,25 @@ class ConfigPanel(wx.Panel):
         inp_sizer.Add(browse_button, 0, wx.TOP | wx.RIGHT | wx.BOTTOM, 5)
         browse_button.Bind(wx.EVT_BUTTON, self.on_browse)
 
+        quad_sizer = wx.StaticBoxSizer(wx.HORIZONTAL, self, label="Zone Rasterization")
+        sizer.Add(quad_sizer, 0, wx.EXPAND | wx.ALL, 5)
+        upper = self.settings.get("quad_split", {}).get("upper", 1)
+        lower = self.settings.get("quad_split", {}).get("lower", 0.1)
+        self.upper_limit_box = wx.SpinCtrlDouble(self, min=0.01, max=20, inc=0.05, initial=upper)
+        self.lower_limit_box = wx.SpinCtrlDouble(self, min=0.01, max=20, inc=0.05, initial=lower)
+        inner_quad_sizer = wx.FlexGridSizer(3)
+        quad_sizer.Add(inner_quad_sizer, 1, wx.EXPAND)
+        inner_quad_sizer.AddGrowableCol(0, 1)
+        inner_quad_sizer.AddGrowableCol(2, 1)
+        inner_quad_sizer.Add(wx.StaticText(self, label="Upper Splitting Limit / mm"), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
+        inner_quad_sizer.AddSpacer(5)
+        inner_quad_sizer.Add(wx.StaticText(self, label="Lower Splitting Limit / mm"), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
+        inner_quad_sizer.Add(self.upper_limit_box, 1, wx.TOP | wx.BOTTOM | wx.LEFT | wx.ALIGN_CENTER, 5)
+        inner_quad_sizer.AddSpacer(5)
+        inner_quad_sizer.Add(self.lower_limit_box, 1, wx.TOP | wx.BOTTOM | wx.LEFT | wx.ALIGN_CENTER, 5)
 
-        sizer.AddStretchSpacer(1)
+
+        sizer.AddSpacer(20)
 
         bottom_sizer = wx.FlexGridSizer(2)
         sizer.Add(bottom_sizer, 1, wx.EXPAND)
@@ -111,16 +128,23 @@ class ConfigPanel(wx.Panel):
         self.settings["spice"]["file_name"] = self.spice_filename_box.GetValue()
         self.settings["spice"]["frequency"] = self.spice_freq_box.GetValue()
 
+        self.settings["quad_split"] = {}
+        self.settings["quad_split"]["upper"] = self.upper_limit_box.GetValue()
+        self.settings["quad_split"]["lower"] = self.lower_limit_box.GetValue()
+
         if not self.settings.get("fh_config"):
             dialog = FHConfigDialog(self, {})
             dialog.on_apply(None)
             self.settings["fh_config"] = dialog.config
-        self.settings["fh_config"]["file"] = self.fh_file_box.GetValue()
-        self.fh_file_box.Append(self.fh_file_box.GetValue())
+        file_str = self.fh_file_box.GetValue()
+        self.settings["fh_config"]["file"] = file_str
+        if not file_str in self.fh_file_box.GetStrings():
+            self.fh_file_box.Append(file_str)
         if self.settings["fh_config"].get("last_files"):
-            self.settings["fh_config"]["last_files"].append(self.fh_file_box.GetValue())
+            if not file_str in self.settings["fh_config"]["last_files"]:
+                self.settings["fh_config"]["last_files"].append(file_str)
         else:
-            self.settings["fh_config"]["last_files"] = [self.fh_file_box.GetValue()]
+            self.settings["fh_config"]["last_files"] = [file_str]
 
     def on_config_fh(self, event: wx.Event) -> None:
         dialog = FHConfigDialog(self, self.settings.get("fh_config", {}))

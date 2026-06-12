@@ -133,6 +133,8 @@ class Translator():
     element_max_length: int = field(default=int(1e9), init = False) # 1m
     copper_zones: list[CopperZone] = field(default_factory=list, init=False)
     eqivs: list[Equivalence] = field(default_factory=list, init=False)
+    quad_upper_mm: float = 3
+    quad_lower_mm: float = 0.25
 
     def reset(self) -> None:
         self.nets: list[str] = []
@@ -158,6 +160,10 @@ class Translator():
 
     def set_filament_mode(self, mode: FilamentMode) -> None:
         self.filament_mode = mode
+
+    def set_quad_limits(self, upper_mm: float, lower_mm: float) -> None:
+        self.quad_upper_mm = upper_mm
+        self.quad_lower_mm = lower_mm
 
     def translate(self) -> str | None:
         """Actually do the thing."""
@@ -373,8 +379,8 @@ class Translator():
         for zone in self.copper_zones:
             xmin, ymin, xmax, ymax = map(int, zone.polygon.bounds)
             quadtree = Quad(xmin, ymin, xmax, ymax, zone.polygon, None, 0)
-            lower = upper = from_mm(3)
-            print("Create Translation Options with proper settings entries.")
+            lower = from_mm(self.quad_lower_mm)
+            upper = from_mm(self.quad_upper_mm)
             quadtree.down_to_size(lower, upper)
             quadtree.set_neighbours()
             leaves = quadtree.get_leaves(Relation.inside | Relation.intersecting)
