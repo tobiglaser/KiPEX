@@ -52,6 +52,8 @@ class Element():
     w_ratio: int = 2
     h_ratio: int = 2
     sigma: float | None = None # 1/(mm*Ohm)
+    def __str__(self) -> str:
+        return f"E{self.index}"
     def to_line(self) -> str:
         extra = ""
         if self.nwinc != 1: extra += f" nwinc={self.nwinc}"
@@ -456,25 +458,31 @@ class Translator():
 
             net_nodes = [n for n in self.nodes.values() if n.net == ph.net]
             if not start_node:
-                closest_node = net_nodes[0]
+                closest_node = None
                 closest_distance = 1e9
                 for node in net_nodes:
+                    if node.position.z != start_pos.z: continue
+                    if not closest_node: closest_node = node
                     distance = start_pos.distance2D(node.position)
                     if distance < closest_distance:
                         closest_node = node
                         closest_distance = distance
+                if not closest_node: raise Exception(f"No Start-Node found for {ph}")
                 self.node_index += 1
                 start_node = Node(self.node_index, ph.net, start_pos)
                 self.nodes[start_pos] = start_node
                 self.eqivs.append(Equivalence([start_node, closest_node]))
             if not end_node:
-                closest_node = net_nodes[0]
+                closest_node = None
                 closest_distance = 1e9
                 for node in net_nodes:
+                    if node.position.z != end_pos.z: continue
+                    if not closest_node: closest_node = node
                     distance = end_pos.distance2D(node.position)
                     if distance < closest_distance:
                         closest_node = node
                         closest_distance = distance
+                if not closest_node: raise Exception(f"No End-Node found for {ph}")
                 self.node_index += 1
                 end_node = Node(self.node_index, ph.net, end_pos)
                 self.nodes[end_pos] = end_node
@@ -506,7 +514,7 @@ class Translator():
                 start_node = self.nodes[Point3D(center.x, center.y, z)]
             else:
                 polygon = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
-                inside_points = [position for position, node in self.nodes.items() if node.net == net and position.inside(polygon)]
+                inside_points = [position for position, node in self.nodes.items() if node.net == net and position.inside(polygon) and position.z == z]
                 if not inside_points:
                     raise Exception("No available point inside Pad", pre_port.start_pad)
                 closest_point = inside_points[0]
@@ -528,7 +536,7 @@ class Translator():
                 end_node = self.nodes[Point3D(center.x, center.y, z)]
             else:
                 polygon = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
-                inside_points = [position for position, node in self.nodes.items() if node.net == net and position.inside(polygon)]
+                inside_points = [position for position, node in self.nodes.items() if node.net == net and position.inside(polygon) and position.z == z]
                 if not inside_points:
                     raise Exception("No available point inside Pad", pre_port.end_pad)
                 closest_point = inside_points[0]

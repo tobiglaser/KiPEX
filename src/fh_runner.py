@@ -29,7 +29,11 @@ class Executer:
         out = self.process.GetInputStream()
         err = self.process.GetErrorStream()
         if out.CanRead():
-            str = out.read().decode()
+            str = out.read()
+            try:
+                str = str.decode("utf8")
+            except UnicodeDecodeError:
+                str = str.decode("cp1252", errors="replace")
             #print("out: ", str)
             self.log_area.AppendText(str)
             if "Frequency" in str:

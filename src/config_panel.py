@@ -90,8 +90,11 @@ class ConfigPanel(wx.Panel):
         inner_quad_sizer.AddSpacer(5)
         inner_quad_sizer.Add(self.lower_limit_box, 1, wx.TOP | wx.BOTTOM | wx.LEFT | wx.ALIGN_CENTER, 5)
 
+        self.visualization_box = wx.CheckBox(self, label="Visualize on Generation")
+        self.visualization_box.SetValue(self.settings.get("visualize", True))
+        sizer.Add(self.visualization_box, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
-        sizer.AddSpacer(20)
+        sizer.AddSpacer(10)
 
         bottom_sizer = wx.FlexGridSizer(2)
         sizer.Add(bottom_sizer, 1, wx.EXPAND)
@@ -131,6 +134,8 @@ class ConfigPanel(wx.Panel):
         self.settings["quad_split"] = {}
         self.settings["quad_split"]["upper"] = self.upper_limit_box.GetValue()
         self.settings["quad_split"]["lower"] = self.lower_limit_box.GetValue()
+
+        self.settings["visualize"] = self.visualization_box.GetValue()
 
         if not self.settings.get("fh_config"):
             dialog = FHConfigDialog(self, {})
@@ -195,8 +200,11 @@ if __name__ == "__main__":
     import json
     app = wx.App()
     frame = wx.Frame(None)
-    with open("settings.json") as file:
-        settings = json.load(file)
+    try:
+        with open("settings.json") as file:
+            settings = json.load(file)
+    except:
+        settings = {}
     panel = ConfigPanel(frame, settings)
     sizer = wx.BoxSizer()
     sizer.Add(panel, 1, wx.EXPAND)

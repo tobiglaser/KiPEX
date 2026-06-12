@@ -12,6 +12,7 @@ from translator import Translator
 from z_mat import Z_mat
 from engineering_notation import EngUnit
 from version import build_version
+from visualizer import Visualizer
 
 
 #def Error(message: str):
@@ -130,6 +131,8 @@ class App(wx.App):
         self.translator.set_quad_limits(self.settings["quad_split"]["upper"], self.settings["quad_split"]["lower"])
         try:
             error_str = self.translator.translate()
+            if self.settings["visualize"]:
+                Visualizer(self.translator).visualize()
         except:
             error_str = ""
             tb = traceback.format_exc()

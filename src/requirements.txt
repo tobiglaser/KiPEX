@@ -1,4 +1,5 @@
 kicad-python
 wxPython
 shapely
+pyvista
 engineering_notation
