@@ -110,7 +110,7 @@ class App(wx.App):
             file = self.settings["fh_config"].get("file", "")
             if not file: file = "-h"
             suffix = self.settings["fh_config"]["options"].get("-S", "")
-            command = fh_path + " " + (f"-S{suffix}" if suffix else "") + " " + file
+            command = fh_path + " " + (f"-S{suffix}" if suffix else "") + ' "' + file + '"'
             self.log_area.AppendText(command + "\n")
             self.fh_runner.run_FH(command)
         else:
