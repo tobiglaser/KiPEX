@@ -90,10 +90,10 @@ class Visualizer():
         direction = (p2 - p1) / length
 
         # Create a box aligned with +X, then rotate into place
-        box = pv.Box(bounds=(
+        box = pv.Box(bounds=np.array([
             -length/2, length/2,
             -width/2, width/2,
-            -height/2, height/2))
+            -height/2, height/2]))
 
         # Compute rotation
         x_axis = np.array([1, 0, 0])

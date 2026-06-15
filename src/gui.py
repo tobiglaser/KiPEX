@@ -127,6 +127,10 @@ class App(wx.App):
             sink   = self.net_panel.portdict[net]["sink"]
             self.translator.add_port_from_netpanel(source, sink, net)
         
+        self.log_area.AppendText("Generating...\n")
+        self.config_panel.run_button.Disable()
+        self.config_panel.gen_button.Disable()
+        
         self.translator.set_frequency_range(self.settings["freqs"]["min"], self.settings["freqs"]["max"], self.settings["freqs"]["ndec"])
         self.translator.set_quad_limits(self.settings["quad_split"]["upper"], self.settings["quad_split"]["lower"])
         try:
@@ -137,8 +141,13 @@ class App(wx.App):
             error_str = ""
             tb = traceback.format_exc()
             self.log_area.AppendText(f"Exception during Generation:\n {tb}\n")
+            self.config_panel.run_button.Enable()
+            self.config_panel.gen_button.Enable()
+            return
         if error_str:
             self.log_area.AppendText("Generation Error:\n" + error_str + "\n")
+            self.config_panel.run_button.Enable()
+            self.config_panel.gen_button.Enable()
             return
         file_name = self.settings["fh_config"]["file"]
         if path.exists(file_name):
@@ -149,9 +158,15 @@ class App(wx.App):
                 style=wx.YES_NO | wx.NO_DEFAULT)
             result = mb.ShowModal()
             if result != wx.ID_YES:
+                self.log_area.AppendText("Results discarted.")
+                self.config_panel.run_button.Enable()
+                self.config_panel.gen_button.Enable()
                 return
         with open(file_name, 'w') as file:
             self.translator.export(file)
+            self.log_area.AppendText(f'Saved to "{file_name}".')
+            self.config_panel.run_button.Enable()
+            self.config_panel.gen_button.Enable()
 
 
     def on_fh_state(self, running: bool, state: str = "messy") -> None:
@@ -177,8 +192,10 @@ class App(wx.App):
                         style=wx.YES_NO | wx.NO_DEFAULT)
                     result = mb.ShowModal()
                     if result != wx.ID_YES:
+                        self.log_area.AppendText("SPICE discarted.")
                         return
                 z.export_spice(filename, frequency)
+                self.log_area.AppendText(f'SPICE file generated: "{filename}"')
 
     # def set_layers(self, layers: list) -> None:
     #     self.layer_list.Set(layers)

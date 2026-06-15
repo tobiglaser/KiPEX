@@ -105,16 +105,16 @@ class ConfigPanel(wx.Panel):
 
         fila_button = wx.Button(self, label="Filamentization")
         config_fh_button = wx.Button(self, label="Configure FastHenry")
-        gen_button = wx.Button(self, label="Generate Model")
+        self.gen_button = wx.Button(self, label="Generate Model")
         self.run_button = wx.Button(self, label="Start Simulation!")
         bottom_sizer.Add(fila_button, 1, wx.EXPAND | wx.ALL, 5)
         bottom_sizer.Add(config_fh_button, 1, wx.EXPAND | wx.ALL, 5)
-        bottom_sizer.Add(gen_button, 1, wx.EXPAND | wx.ALL, 5)
+        bottom_sizer.Add(self.gen_button, 1, wx.EXPAND | wx.ALL, 5)
         bottom_sizer.Add(self.run_button, 1, wx.EXPAND | wx.ALL, 5)
         fila_button.Bind(wx.EVT_BUTTON, self.on_filament)
         fila_button.Disable()
         config_fh_button.Bind(wx.EVT_BUTTON, self.on_config_fh)
-        gen_button.Bind(wx.EVT_BUTTON, self.on_generate)
+        self.gen_button.Bind(wx.EVT_BUTTON, self.on_generate)
         self.run_button.Bind(wx.EVT_BUTTON, self.on_run_fh)
 
     def apply_freqs(self) -> None:
