@@ -4,7 +4,7 @@ from math import ceil
 from kipy import KiCad
 from kipy.errors import ApiError
 from kipy.board import Board
-from kipy.board_types import Net, Track, ArcTrack, Zone, Pad
+from kipy.board_types import Net, Track, ArcTrack, Zone, Pad, FootprintInstance, BoardPolygon
 from kipy.geometry import PolygonWithHoles
 from kipy.proto.board.board_types_pb2 import BoardLayer, PadType, ViaType
 from kipy.util.units import to_mm, from_mm
@@ -137,6 +137,8 @@ class Translator():
     eqivs: list[Equivalence] = field(default_factory=list, init=False)
     quad_upper_mm: float = 3
     quad_lower_mm: float = 0.25
+    bridging_fp_layer: BoardLayer.ValueType = BoardLayer.BL_User_1
+    bridging_footprints: list[FootprintInstance] = field(init=False, default_factory=list)
 
     def reset(self) -> None:
         self.nets: list[str] = []
@@ -167,6 +169,13 @@ class Translator():
         self.quad_upper_mm = upper_mm
         self.quad_lower_mm = lower_mm
 
+    def set_bridging_footprint_layer(self, layer: BoardLayer.ValueType) -> None:
+        self.bridging_fp_layer = layer
+
+    def set_footprint_quad_limits(self, upper_mm: float, lower_mm: float) -> None:
+        self.fp_quad_upper_mm = upper_mm
+        self.fp_quad_lower_mm = lower_mm
+
     def translate(self) -> str | None:
         """Actually do the thing."""
         try:
@@ -174,6 +183,22 @@ class Translator():
             self.zones()
             self.traces()
             self.vias()
+            self.ports()
+        except ApiError as error:
+            if error.code == 7:
+                api_warning()
+                return "API busy"
+            else:
+                raise error
+    
+    def translate_loop(self) -> str | None:
+        """Actually do the thing."""
+        try:
+            self.stackup()
+            self.zones()
+            self.traces()
+            self.vias()
+            self.footprints()
             self.ports()
         except ApiError as error:
             if error.code == 7:
@@ -226,14 +251,29 @@ class Translator():
         self.add_port_from_pads(start_pad, start_layer, end_pad, end_layer, name)
     
     def add_port_from_pads(self, start_pad: Pad, start_layer: BoardLayer.ValueType, end_pad: Pad, end_layer: BoardLayer.ValueType, name: str):
-        if not start_pad.net.name == end_pad.net.name:
-            raise Exception("Port nets did not match.")
-        self.add_net(start_pad.net.name)
+        if not start_pad.net.name in self.nets:
+            self.add_net(start_pad.net.name)
+        if not end_pad.net.name in self.nets:
+            self.add_net(end_pad.net.name)
         self.preliminary_ports.append(PreliminaryPort(start_pad, start_layer, end_pad, end_layer, name))
     
     def add_net(self, net: str) -> None:
         if net not in self.nets:
             self.nets.append(net)
+
+    def add_loop_footprint(self, reference: str) -> None:
+        fpis = self.board.get_footprints()
+        for fpi in fpis:
+            if reference == fpi.reference_field.text.value:
+                shapes = fpi.definition.shapes
+                polycount = 0
+                for shape in shapes:
+                    if shape.layer == self.bridging_fp_layer:
+                        if type(shape) == BoardPolygon:
+                            polycount += len(shape.polygons)
+                if polycount == 1:
+                    self.bridging_footprints.append(fpi)
+                    return
 
     def stackup(self) -> None:
         stackup = self.board.get_stackup()
@@ -410,6 +450,119 @@ class Translator():
                                     height=thickness
                                 )
 
+    def footprints(self) -> None:
+        for fp in self.bridging_footprints:
+            bridge_poly = None
+            for shape in fp.definition.shapes:
+                if shape.layer == self.bridging_fp_layer and type(shape) == BoardPolygon:
+                    bridge_poly = self.polygon_kicad_to_shapely(shape.polygons[0])
+                    break
+            if not bridge_poly: raise
+            side = fp.layer
+            pads: list[Pad] = []
+            height = None
+            thickness = None
+            for pad in fp.definition.pads:
+                pad_poly = self.board.get_pad_shapes_as_polygons(pad, side)
+                if not pad_poly: raise
+                pad_poly = self.polygon_kicad_to_shapely(pad_poly)
+                if bridge_poly.intersects(pad_poly) and (not self.nets or pad.net.name in self.nets):
+                    pads.append(pad)
+            
+            for field in fp.texts_and_fields:
+                name = getattr(field, "name", "")
+                if name == "KiPEX_Height_mm": # we know that .text is populated here
+                    height = float(field.text.value.replace(',', '.')) # type: ignore
+                if name == "KiPEX_Thickness_mm":
+                    thickness = float(field.text.value.replace(',', '.')) # type: ignore
+            if not height or not thickness: raise
+            
+            xmin, ymin, xmax, ymax = map(int, bridge_poly.bounds)
+            quadtree = Quad(xmin, ymin, xmax, ymax, bridge_poly, None, 0)
+            lower = from_mm(self.fp_quad_lower_mm)
+            upper = from_mm(self.fp_quad_upper_mm)
+            quadtree.down_to_size(lower, upper)
+            quadtree.set_neighbours()
+            leaves = quadtree.get_leaves(Relation.inside | Relation.intersecting)
+            leaves = sorted(leaves, key=lambda quad: quad.depth, reverse=True)
+
+            z_bridge = self.zs[side]
+            if side == BoardLayer.BL_F_Cu:
+                z_bridge -= from_mm(height)
+            else:
+                z_bridge += from_mm(height)
+            thickness = from_mm(thickness)
+            for leaf in leaves:
+                sides = leaf.to_inside_sides(z_bridge)
+                for side in sides:
+                    if not self.nodes.get(side.start):
+                        self.node_index += 1
+                        self.nodes[side.start] = Node(self.node_index, "Bridge", side.start)
+                    if not self.nodes.get(side.end):
+                        self.node_index += 1
+                        self.nodes[side.end] = Node(self.node_index, "Bridge", side.end)
+                    if not self.nodes.get(side.middle()):
+                        if not self.elements.get((side.start, side.end)) and not self.elements.get((side.end, side.start)):
+                                self.element_index += 1
+                                self.elements[side.start, side.end] = Element(
+                                    index=self.element_index,
+                                    start=self.nodes[side.start],
+                                    end=self.nodes[side.end],
+                                    width=side.width,
+                                    height=thickness
+                                )
+
+            for pad in pads:
+                side = fp.layer
+                z_pad = self.zs[side]
+                pad_polygon = self.board.get_pad_shapes_as_polygons(pad, side)
+                if not pad_polygon: raise
+                bounding_box = pad_polygon.bounding_box()
+                center = bounding_box.center()
+                center = Point3D(center.x, center.y, z_pad)
+                if self.nodes.get(Point3D(center.x, center.y, z_pad)):
+                    pad_node = self.nodes[Point3D(center.x, center.y, z_pad)]
+                else:
+                    polygon = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
+                    inside_points = [position for position, node in self.nodes.items() if node.net == pad.net.name and position.inside(polygon) and position.z == z_pad]
+                    if not inside_points:
+                        raise Exception("No available point inside Pad", pad)
+                    closest_point = inside_points[0]
+                    closest_distance = 1e9
+                    for point in inside_points:
+                        distance = center.distance2D(point)
+                        if distance < closest_distance:
+                            closest_point = point
+                            closest_distance = distance
+                    pad_node = self.nodes[closest_point]
+
+                if self.nodes.get(Point3D(center.x, center.y, z_bridge)):
+                    bridge_node = self.nodes[Point3D(center.x, center.y, z_bridge)]
+                else:
+                    closest_distance = 1e9
+                    closest_node = None
+                    for point, node in self.nodes.items():
+                        if not point.z == z_bridge:
+                            continue
+                        distance = point.distance2D(pad_node.position)
+                        if distance < closest_distance:
+                            closest_distance = distance
+                            closest_node = node
+                    if not closest_node: raise
+                    bridge_node = closest_node
+                
+                width = min(bounding_box.size.x, bounding_box.size.y)
+
+                self.element_index += 1
+                element = Element(
+                    self.element_index,
+                    pad_node,
+                    bridge_node,
+                    width,
+                    width,
+                    )
+                self.elements[pad_node.position, bridge_node.position] = element
+
     def vias(self) -> None:
         """Only very basic vias for now."""
         if not self.is_two_layer() or not self.via_mode == ViaMode.ignore_inner_layers:
@@ -502,8 +655,8 @@ class Translator():
 
     def ports(self) -> None:
         for pre_port in self.preliminary_ports:
-            net = pre_port.start_pad.net.name
             # start
+            net = pre_port.start_pad.net.name
             z = self.zs[pre_port.start_layer]
             pad_polygon = self.board.get_pad_shapes_as_polygons(pre_port.start_pad, pre_port.start_layer)
             if not pad_polygon:
@@ -526,6 +679,7 @@ class Translator():
                         closest_distance = distance
                 start_node = self.nodes[closest_point]
             # end
+            net = pre_port.end_pad.net.name
             z = self.zs[pre_port.end_layer]
             pad_polygon = self.board.get_pad_shapes_as_polygons(pre_port.end_pad, pre_port.end_layer)
             if not pad_polygon:
@@ -555,8 +709,35 @@ class Translator():
 
 
 if __name__ == "__main__":
-    translator = Translator(KiCad().get_board(), {})
-    translator.translate()
+    board = KiCad().get_board()
+    translator = Translator(board, {})
+
+    start_pad = None
+    end_pad = None
+    layer = None
+    for fpi in board.get_footprints():
+        try:
+            if fpi.reference_field.text.value == "C9":
+                start_pad = fpi.definition.pads[0]
+                end_pad = fpi.definition.pads[1]
+                layer = fpi.layer
+        except: pass
+    if not start_pad or not end_pad or not layer: raise
+
+    translator.set_frequency_range(100e3, 100e3, 1)
+    translator.add_net("Net-(U1-DRAIN_1)")
+    translator.add_net("Net-(SW1-Pin_1)")
+    translator.add_net("GND")
+    translator.add_loop_footprint("U1")
+    translator.add_loop_footprint("U2")
+    translator.add_port_from_pads(start_pad, layer, end_pad, layer, "C9")
+    translator.set_quad_limits(1, 1)
+    translator.set_footprint_quad_limits(1, 1)
+
+    translator.translate_loop()
+    
+    from visualizer import Visualizer
+    Visualizer(translator).visualize()
     with open("export_test.txt", 'w') as file:
         translator.export(file, "My unique title.")
 
