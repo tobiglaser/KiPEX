@@ -191,14 +191,14 @@ class Translator():
             else:
                 raise error
     
-    def translate_loop(self) -> str | None:
-        """Actually do the thing."""
+    def translate_loop(self, pad_mode: str = "inside") -> str | None:
+        """ "closest" (to pad center) or "inside" (pad)"""
         try:
             self.stackup()
             self.zones()
             self.traces()
             self.vias()
-            self.footprints()
+            self.footprints(pad_mode)
             self.ports()
         except ApiError as error:
             if error.code == 7:
@@ -450,7 +450,7 @@ class Translator():
                                     height=thickness
                                 )
 
-    def footprints(self) -> None:
+    def footprints(self, pad_mode: str) -> None:
         for fp in self.bridging_footprints:
             bridge_poly = None
             for shape in fp.definition.shapes:
@@ -524,12 +524,17 @@ class Translator():
                     pad_node = self.nodes[Point3D(center.x, center.y, z_pad)]
                 else:
                     polygon = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
-                    inside_points = [position for position, node in self.nodes.items() if node.net == pad.net.name and position.inside(polygon) and position.z == z_pad]
-                    if not inside_points:
+                    if pad_mode == "inside":
+                        points = [position for position, node in self.nodes.items() if node.net == pad.net.name and position.inside(polygon) and position.z == z_pad]
+                    elif pad_mode == "closest":
+                        points = [position for position, node in self.nodes.items() if node.net == pad.net.name and position.z == z_pad]
+                    else:
+                        points = []
+                    if not points:
                         raise Exception("No available point inside Pad", pad)
-                    closest_point = inside_points[0]
+                    closest_point = points[0]
                     closest_distance = 1e9
-                    for point in inside_points:
+                    for point in points:
                         distance = center.distance2D(point)
                         if distance < closest_distance:
                             closest_point = point
@@ -709,7 +714,8 @@ class Translator():
 
 
 if __name__ == "__main__":
-    board = KiCad().get_board()
+    kicad = KiCad()
+    board = kicad.get_board()
     translator = Translator(board, {})
 
     start_pad = None
@@ -731,13 +737,19 @@ if __name__ == "__main__":
     translator.add_loop_footprint("U1")
     translator.add_loop_footprint("U2")
     translator.add_port_from_pads(start_pad, layer, end_pad, layer, "C9")
-    translator.set_quad_limits(1, 1)
-    translator.set_footprint_quad_limits(1, 1)
+    translator.set_quad_limits(3, 1)
+    translator.set_footprint_quad_limits(3, 1)
 
-    translator.translate_loop()
+    translator.translate_loop("closest") # "closest" (to pad center) or "inside" (pad)
     
     from visualizer import Visualizer
     Visualizer(translator).visualize()
-    with open("export_test.txt", 'w') as file:
+    import os
+    working_dir = kicad.get_project(kicad.get_board().document).path
+    working_dir = os.path.join(working_dir, "KiPEX")
+    if not os.path.exists(working_dir):
+        os.mkdir(working_dir)
+    os.chdir(working_dir)
+    with open("export_test.inp", 'w') as file:
         translator.export(file, "My unique title.")
 
