@@ -158,13 +158,13 @@ class App(wx.App):
                 style=wx.YES_NO | wx.NO_DEFAULT)
             result = mb.ShowModal()
             if result != wx.ID_YES:
-                self.log_area.AppendText("Results discarted.")
+                self.log_area.AppendText("Results discarted.\n")
                 self.config_panel.run_button.Enable()
                 self.config_panel.gen_button.Enable()
                 return
         with open(file_name, 'w') as file:
             self.translator.export(file)
-            self.log_area.AppendText(f'Saved to "{file_name}".')
+            self.log_area.AppendText(f'Saved to "{file_name}".\n')
             self.config_panel.run_button.Enable()
             self.config_panel.gen_button.Enable()
 

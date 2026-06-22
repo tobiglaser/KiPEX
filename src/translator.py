@@ -301,9 +301,23 @@ class Translator():
 
             position_A = Point3D(track.start.x, track.start.y, z)
             position_B = Point3D(track.end.x,   track.end.y,   z)
+            trace_inside = False
+            a_in_zone = False
+            b_in_zone = False
             for zone in self.copper_zones:
-                if position_A.inside(zone.polygon) and position_B.inside(zone.polygon):
+                if zone.layer != track.layer:
                     continue
+                a_inside = position_A.inside(zone.polygon)
+                b_inside = position_B.inside(zone.polygon)
+                if a_inside and b_inside:
+                    trace_inside = True
+                    break
+                elif a_inside:
+                    a_in_zone = True
+                elif b_inside:
+                    b_in_zone = True
+            if trace_inside:
+                continue
 
             if not self.nodes.get(position_A):
                 self.node_index += 1
@@ -318,6 +332,24 @@ class Translator():
                 self.nodes[position_B] = node_B
             else:
                 node_B =  self.nodes[position_B]
+
+            inside_nodes: list[Node] = []
+            inside_nodes += [node_A] if a_in_zone else []
+            inside_nodes += [node_B] if b_in_zone else []
+            for trace_node in inside_nodes:
+                if not trace_node: continue
+                closest_node = None
+                closest_dist = 1e9
+                for node in self.nodes.values():
+                    if not node.net == track.net.name or not node.position.z == trace_node.position.z:
+                        continue
+                    distance = trace_node.position.distance2D(node.position)
+                    if distance < closest_dist and not node == trace_node:
+                        closest_dist = distance
+                        closest_node = node
+                if not closest_node: raise # we are already in a zone
+                equiv = Equivalence([trace_node, closest_node])
+                self.eqivs.append(Equivalence([trace_node, closest_node]))
 
             thickness = self.copper_thicknesses[track.layer]
             width = track.width
