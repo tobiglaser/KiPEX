@@ -20,6 +20,19 @@
       "icons-light": [
         "icons/icon.png"
       ]
+    },
+    {
+      "identifier": "Translator",
+      "name": "Translator",
+      "description": "Run translator.py directly",
+      "show-button": true,
+      "scopes": [
+          "pcb"
+      ],
+      "entrypoint": "translator.py",
+      "icons-light": [
+        "icons/icon_green.png"
+      ]
     }
   ]
 }
