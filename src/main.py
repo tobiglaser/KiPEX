@@ -1,5 +1,6 @@
 import os
 from kipy import KiCad
+from kipy.kicad import KiCadVersion
 from kipy.errors import ApiError
 from kipy.proto.board.board_types_pb2 import BoardLayer
 from kipy.board_types import Pad
@@ -12,7 +13,10 @@ from util import ensure_fasthenry_path, ensure_settings_exist
 
 if __name__ == "__main__":
     kicad = KiCad()
-    settings_dir = kicad.get_plugin_settings_path("com_github_tobiglaser_kipex")
+    if kicad.get_version() < KiCadVersion(10, 0, 5, ""): # see https://www.kicad.org/blog/2026/07/KiCad-10.0.5-Release/
+        settings_dir = kicad.get_plugin_settings_path("com_github_tobiglaser_kipex")
+    else:
+        settings_dir = kicad.get_plugin_settings_path("com.github.tobiglaser.kipex")
     working_dir = kicad.get_project(kicad.get_board().document).path
     working_dir = os.path.join(working_dir, "KiPEX")
     project_title = kicad.get_project(kicad.get_board().document).name
