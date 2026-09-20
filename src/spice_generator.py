@@ -26,19 +26,11 @@ def generate_spice(file_name: str,
             gnd_ref = "GND"
         file.write("\n\n")
 
-        nc: int = 1
-
+        nc: int = 0
         for i, net in enumerate(net_names):
+            nc += 1
             file.write(f"R{i+1} {net}_a N{nc} {R[i][i]}\n")
-            for j, cross_L in enumerate(L[i]):
-                next_node = f"N{nc+1}"
-                if j == len(L)-1:
-                    next_node = f"{net}_b"
-                if L[i][j] >= 0:
-                    file.write(f"L{i+1}{j+1} N{nc} {next_node} {L[i][j]}\n")
-                elif L[i][j] < 0:
-                    file.write(f"L{i+1}{j+1} {next_node} N{nc} {L[i][j]}\n")
-                nc += 1
+            file.write(f"L{i+1}{i+1} N{nc} {net}_b {L[i][i]}\n")
             file.write("\n")
         
         if C:
@@ -60,7 +52,7 @@ def generate_spice(file_name: str,
             K[i][i] = 0
             for j, k in enumerate(row):
                 if k != 0 and not isnan(k):
-                    file.write(f"K{i+1}{j+1}_{j+1}{i+1} L{i+1}{j+1} L{j+1}{i+1} {K[i][j]}\n")
+                    file.write(f"K{i+1}{j+1}_{j+1}{i+1} L{i+1}{i+1} L{j+1}{j+1} {K[i][j]}\n")
                     K[i][j] = 0
                     K[j][i] = 0
 
