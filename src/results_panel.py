@@ -38,7 +38,7 @@ class ResultsPanel(wx.Panel):
 
         for i, freq in enumerate(F):
             panel = wx.Panel(self.lb)
-            self.lb.AddPage(panel, f"{EngUnit(freq, 0,0,'Hz')}")
+            self.lb.AddPage(panel, f"{EngUnit(freq, 0,3,'Hz')}")
             bs = wx.BoxSizer()
             splitter = wx.SplitterWindow(panel, style=wx.SP_3D | wx.SP_THIN_SASH | wx.SP_NO_XP_THEME | wx.SP_LIVE_UPDATE)
             bs.Add(splitter, 1, wx.EXPAND)
