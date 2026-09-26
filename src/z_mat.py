@@ -91,7 +91,8 @@ class Z_mat:
             for i, L_i in enumerate(L[f]):
                 K_i = []
                 for j, L_ij in enumerate(L_i):
-                    k_ij = abs(L_ij) / sqrt(L[f][i][i] * L[f][j][j])
+                    L_ij_ji = (L_ij + L[f][j][i]) / 2
+                    k_ij = abs(L_ij_ji) / sqrt(L[f][i][i] * L[f][j][j])
                     K_i.append(k_ij)
                 K_f.append(K_i)
             self.K.append(K_f)
