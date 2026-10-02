@@ -22,7 +22,7 @@ class FilamentMode(Enum):
     default = 0 # whatever default means
 
 class ViaMode(Enum):
-    ignore_inner_layers = 0
+    full = 0
 
 @dataclass
 class CopperZone():
@@ -122,7 +122,7 @@ class Translator():
     nets: list[str] = field(default_factory=list, init=False)
     frequency: Frequencies = field(default_factory=Frequencies, init=False)
     conductivity: float = 5.8e4 # 1/(mm*Ohm)
-    via_mode: ViaMode = ViaMode.ignore_inner_layers
+    via_mode: ViaMode = ViaMode.full
     filament_mode: FilamentMode = FilamentMode.default
     nodes: dict[Point3D, Node] = field(default_factory=dict, init=False)
     elements: dict[tuple[Point3D, Point3D], Element] = field(default_factory=dict, init=False)
@@ -601,16 +601,10 @@ class Translator():
                 self.elements[pad_node.position, bridge_node.position] = element
 
     def vias(self) -> None:
-        """Only very basic vias for now."""
-        if not self.is_two_layer() or not self.via_mode == ViaMode.ignore_inner_layers:
-            raise Exception("Only two layers with most basic vias implemented.")
-        
         PHs: list[PlatedHole] = []
 
         for via in self.board.get_vias():
             if not via.net.name in self.nets:
-                continue
-            if via.type != ViaType.VT_THROUGH:
                 continue
             ph = PlatedHole(
                 diameter=via.diameter,
@@ -641,54 +635,52 @@ class Translator():
                 PHs.append(ph)
 
         for ph in PHs:
-            start_pos = Point3D(ph.x, ph.y, self.zs[ph.start_layer])
-            end_pos   = Point3D(ph.x, ph.y, self.zs[ph.end_layer])
-            start_node = self.nodes.get(start_pos)
-            end_node   = self.nodes.get(end_pos)
+            positions: list[Point3D] = []
+            if ph.mode == ViaMode.full:
+                if ph.start_layer > ph.end_layer:
+                    tmp = ph.start_layer
+                    ph.start_layer = ph.end_layer
+                    ph.end_layer = tmp
+                for layer, z in self.zs.items():
+                    if layer > ph.end_layer: break
+                    if layer < ph.start_layer: continue
+                    positions.append(Point3D(ph.x, ph.y, z))
 
-            net_nodes = [n for n in self.nodes.values() if n.net == ph.net]
-            if not start_node:
-                closest_node = None
-                closest_distance = 1e9
-                for node in net_nodes:
-                    if node.position.z != start_pos.z: continue
-                    if not closest_node: closest_node = node
-                    distance = start_pos.distance2D(node.position)
-                    if distance < closest_distance:
-                        closest_node = node
-                        closest_distance = distance
-                if not closest_node: raise Exception(f"No Start-Node found for {ph}")
-                self.node_index += 1
-                start_node = Node(self.node_index, ph.net, start_pos)
-                self.nodes[start_pos] = start_node
-                self.eqivs.append(Equivalence([start_node, closest_node]))
-            if not end_node:
-                closest_node = None
-                closest_distance = 1e9
-                for node in net_nodes:
-                    if node.position.z != end_pos.z: continue
-                    if not closest_node: closest_node = node
-                    distance = end_pos.distance2D(node.position)
-                    if distance < closest_distance:
-                        closest_node = node
-                        closest_distance = distance
-                if not closest_node: raise Exception(f"No End-Node found for {ph}")
-                self.node_index += 1
-                end_node = Node(self.node_index, ph.net, end_pos)
-                self.nodes[end_pos] = end_node
-                self.eqivs.append(Equivalence([end_node, closest_node]))
-            
+            net_nodes = None
+            via_nodes: list[Node] = []
+            for pos in positions:
+                node = self.nodes.get(pos)
+
+                if not node:
+                    if net_nodes == None: net_nodes = [n for n in self.nodes.values() if n.net == ph.net]
+                    closest_node = None
+                    closest_distance = 1e9
+                    for node in net_nodes:
+                        if node.position.z != pos.z: continue
+                        if not closest_node: closest_node = node
+                        distance = pos.distance2D(node.position)
+                        if distance < closest_distance:
+                            closest_node = node
+                            closest_distance = distance
+                    if not closest_node: raise Exception(f"No Node found for {ph} at {pos}")
+                    self.node_index += 1
+                    node = Node(self.node_index, ph.net, pos)
+                    via_nodes.append(node)
+                    self.nodes[pos] = node
+                    self.eqivs.append(Equivalence([node, closest_node]))
+
             via_conductance = ph.conductance
             #! Vastly underestimating Via resistance with solid copper conductor the size of via diameter.
-            self.element_index += 1
-            element = Element(
-                self.element_index,
-                start_node,
-                end_node,
-                ph.diameter,
-                ph.diameter,
-                sigma=via_conductance)
-            self.elements[start_node.position, end_node.position] = element
+            for i, node in enumerate(via_nodes[:-1]):
+                self.element_index += 1
+                element = Element(
+                    self.element_index,
+                    via_nodes[i],
+                    via_nodes[i+1],
+                    ph.diameter,
+                    ph.diameter,
+                    sigma=via_conductance)
+                self.elements[element.start.position, element.end.position] = element
 
     def ports(self) -> None:
         for pre_port in self.preliminary_ports:
