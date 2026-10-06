@@ -133,8 +133,8 @@ class App(wx.App):
             self.translator.add_port_from_netpanel(source, sink, net)
         
         self.log_area.AppendText("Generating...\n")
-        self.config_panel.run_button.Disable()
-        self.config_panel.gen_button.Disable()
+        self.net_config_panel.run_button.Disable()
+        self.net_config_panel.gen_button.Disable()
         
         self.translator.set_frequency_range(self.settings["freqs"]["min"], self.settings["freqs"]["max"], self.settings["freqs"]["ndec"])
         self.translator.set_quad_limits(self.settings["quad_split"]["upper"], self.settings["quad_split"]["lower"])
@@ -146,13 +146,13 @@ class App(wx.App):
             error_str = ""
             tb = traceback.format_exc()
             self.log_area.AppendText(f"Exception during Generation:\n {tb}\n")
-            self.config_panel.run_button.Enable()
-            self.config_panel.gen_button.Enable()
+            self.net_config_panel.run_button.Enable()
+            self.net_config_panel.gen_button.Enable()
             return
         if error_str:
             self.log_area.AppendText("Generation Error:\n" + error_str + "\n")
-            self.config_panel.run_button.Enable()
-            self.config_panel.gen_button.Enable()
+            self.net_config_panel.run_button.Enable()
+            self.net_config_panel.gen_button.Enable()
             return
         file_name = self.settings["fh_config"]["file"]
         if path.exists(file_name):
@@ -164,19 +164,19 @@ class App(wx.App):
             result = mb.ShowModal()
             if result != wx.ID_YES:
                 self.log_area.AppendText("Results discarted.\n")
-                self.config_panel.run_button.Enable()
-                self.config_panel.gen_button.Enable()
+                self.net_config_panel.run_button.Enable()
+                self.net_config_panel.gen_button.Enable()
                 return
         with open(file_name, 'w') as file:
             self.translator.export(file)
             self.log_area.AppendText(f'Saved to "{file_name}".\n')
-            self.config_panel.run_button.Enable()
-            self.config_panel.gen_button.Enable()
+            self.net_config_panel.run_button.Enable()
+            self.net_config_panel.gen_button.Enable()
 
 
     def on_fh_state(self, running: bool, state: str = "messy") -> None:
         self.fh_running = running
-        self.config_panel.set_fh_state(running)
+        self.net_config_panel.set_fh_state(running)
         if (running and state == "partial") or (not running and state == "clean"):
             file = "Zc" + self.settings["fh_config"]["options"].get("-S", "")
             self.results_page.read(file + ".csv", file + ".mat")
@@ -185,10 +185,10 @@ class App(wx.App):
                 if self.notebook.GetPage(page) == self.results_page:
                     self.notebook.SetSelection(page)
                     break
-            if state=="clean" and self.config_panel.spice_box.GetValue():
+            if state=="clean" and self.net_config_panel.spice_box.GetValue():
                 z = Z_mat(file + ".csv", file + ".mat")
-                filename = self.config_panel.spice_filename_box.GetValue()
-                frequency = float(EngUnit(self.config_panel.spice_freq_box.GetValue()))
+                filename = self.net_config_panel.spice_filename_box.GetValue()
+                frequency = float(EngUnit(self.net_config_panel.spice_freq_box.GetValue()))
                 if path.exists(filename):
                     mb = wx.MessageDialog(
                         self.frame,
