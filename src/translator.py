@@ -24,6 +24,10 @@ class FilamentMode(Enum):
 class ViaMode(Enum):
     full = 0
 
+class MockUpOptions(Enum):
+    mock_up = 0
+    direct = 1
+
 @dataclass
 class CopperZone():
     polygon: shapely.Polygon

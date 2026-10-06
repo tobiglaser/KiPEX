@@ -6,11 +6,13 @@ class PortPanel(wx.Panel):
     def __init__(self, parent: wx.Window, text: str = "", components_pins: dict[str, list[str]] = {}) -> None:
         super().__init__(parent)
         self.components = components_pins
-        border = wx.StaticBoxSizer(wx.HORIZONTAL, self, text)
+        border = wx.StaticBoxSizer(wx.VERTICAL, self, text)
         self.SetSizer(border)
 
+        self.net_label = wx.StaticText(self, label="Net:")
+        border.Add(self.net_label, 0, wx.ALIGN_CENTER | wx.ALL, 5)
+        self.net_label.Hide()
         
-        #border.Add(start_box, 0, wx.ALL | wx.EXPAND, 5)
         fgs = wx.FlexGridSizer(3)
         border.Add(fgs, 1, wx.EXPAND)
         fgs.AddGrowableCol(0, 1)
@@ -29,12 +31,16 @@ class PortPanel(wx.Panel):
     def on_component_select(self, event: wx.Event):
         self.pin_box.Enable()
         component = self.component_box.GetStringSelection()
-        #pin = self.pin_box.GetValue()
         self.pin_box.SetItems(self.components[component])
-        #if pin in self.components[component]:
-        #    self.pin_box.SetStringSelection(pin)
-        #else:
-        #    self.pin_box.SetSelection(0)
+        self.set_net("")
+        self.Layout()
+
+    def set_net(self, net: str) -> None:
+        self.net_label.SetLabelText(f"Net: {net}")
+        if net:
+            self.net_label.Show()
+        else:
+            self.net_label.Hide()
 
 
 

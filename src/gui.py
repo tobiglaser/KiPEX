@@ -4,6 +4,7 @@ from os import path
 import traceback
 from typing import Callable
 from net_panel import NetPanel
+from loop_panel import LoopPanel
 from config_panel import ConfigPanel
 from results_panel import ResultsPanel
 from fh_runner import Executer
@@ -57,14 +58,22 @@ class App(wx.App):
         
         #self.panel = wx.Panel(self.frame)
         net_sizer = wx.BoxSizer()
-        net_page =wx.Panel(self.notebook)
+        net_page = wx.Panel(self.notebook)
         net_page.SetSizer(net_sizer)
         self.net_panel = NetPanel(net_page)
         net_sizer.Add(self.net_panel, 10, wx.EXPAND | wx.ALL, 10)
-        self.config_panel = ConfigPanel(net_page, self.settings, self.project_name, self.on_run_fh, self.on_generate)
-        net_sizer.Add(self.config_panel, 5, wx.EXPAND | wx.ALL, 10)
+        self.net_config_panel = ConfigPanel(net_page, self.settings, self.project_name, self.on_run_fh, self.on_generate)
+        net_sizer.Add(self.net_config_panel, 0, wx.EXPAND | wx.ALL, 10)
         self.notebook.AddPage(net_page, "From Nets", True)
 
+        loop_sizer = wx.BoxSizer()
+        loop_page = wx.Panel(self.notebook)
+        loop_page.SetSizer(loop_sizer)
+        self.loop_panel = LoopPanel(loop_page)
+        loop_sizer.Add(self.loop_panel, 10, wx.EXPAND | wx.ALL, 10)
+        self.loop_config_panel = ConfigPanel(loop_page, self.settings, self.project_name, lambda: self.log_area.AppendText("Click Dummy!\n"), lambda: self.log_area.AppendText("Click Dummy!\n"))
+        loop_sizer.Add(self.loop_config_panel, 0, wx.EXPAND | wx.ALL, 10)
+        self.notebook.AddPage(loop_page, "Loop Mode", False)
 
         self.results_page = ResultsPanel(self.notebook)
         self.notebook.AddPage(self.results_page, "Results", False)

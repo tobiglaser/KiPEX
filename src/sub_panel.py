@@ -23,12 +23,24 @@ class SubPanel(wx.Panel):
         self.close_button = wx.BitmapButton.NewCloseButton(self, self.Id)
         border.Add(self.close_button, 0, wx.ALL | wx.EXPAND, 5)
 
+        if len(choices) == 1:
+            self.combobox.SetSelection(0)
+            command_event = wx.CommandEvent(wx.EVT_COMBOBOX.typeId)
+            command_event.SetEventObject(self.combobox)
+            wx.PostEvent(self.combobox, command_event)
+
     def on_component_select(self, event: wx.Event):
         if not self.combobox2: return
         self.combobox2.Enable()
         component = self.combobox.GetStringSelection()
         self.combobox2.SetItems(self.second_coices[component])
-        self.combobox2.SetValue("")
+        if len(self.second_coices) == 1:
+            self.combobox2.SetSelection(0)
+            command_event = wx.CommandEvent(wx.EVT_COMBOBOX.typeId)
+            command_event.SetEventObject(self.combobox2)
+            wx.PostEvent(self.combobox2, command_event)
+        else:
+            self.combobox2.SetValue("")
         event.Skip()
 
 

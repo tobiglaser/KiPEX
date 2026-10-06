@@ -68,6 +68,7 @@ class ConfigPanel(wx.Panel):
         fh_file_name = self.settings.get("fh_config", {}).get("file", path.abspath(f"{project_name}.inp"))
         fh_file_choices = self.settings.get("fh_config", {}).get("last_files", [path.abspath(f"{project_name}.inp")])
         self.fh_file_box = wx.ComboBox(self,value=fh_file_name, choices=fh_file_choices)
+        self.fh_file_box.SetMinSize(wx.Size(0, self.fh_file_box.GetMinHeight()))
         inp_sizer.Add(self.fh_file_box, 1, wx.EXPAND | wx.ALL, 5)
         browse_button = wx.Button(self, label="Browse")
         inp_sizer.Add(browse_button, 0, wx.TOP | wx.RIGHT | wx.BOTTOM, 5)
