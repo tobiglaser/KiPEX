@@ -93,10 +93,6 @@ class App(wx.App):
         self.MainLoop()
         pass
 
-    def set_net_pads(self, net_pad_dict: dict[str, list[str]]) -> None:
-        self.net_panel.set_net_pads(net_pad_dict)
-
-
     def set_translator(self, translator: Translator):
         self.translator = translator
 

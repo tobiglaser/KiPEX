@@ -1,5 +1,7 @@
 import wx
 from typing import Any
+from gui_circuit_model import GuiCircuitModel
+
 def emptycb(event: wx.Event):
     print("placeholder")
 
@@ -58,18 +60,21 @@ class NetPanel(wx.Panel):
         right_sizer.Add(ud_sizer, 0, wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT, 10)
         sizer.Add(right_sizer, 1, wx.EXPAND)
         self.SetSizer(sizer)
+        self.init_net_pads()
 
-    def set_net_pads(self, net_pad_dict: dict[str, list[str]]) -> None:
-        self.np_dict = net_pad_dict
-        self.net_list.SetItems([net for net in net_pad_dict.keys()])
+    def init_net_pads(self) -> None:
+        gcm = GuiCircuitModel.get_instance()
+        nets = gcm.get_nets()
+        self.nets = nets
+        self.net_list.SetItems(nets)
         self.portdict = {}
-        for net, pads in net_pad_dict.items():
+        for net in nets:
+            pads = gcm.get_pads_in_net(net)
             if len(pads) < 2:
                 continue
             self.portdict[net] = {}
             self.portdict[net]["source"] = pads[0]
             self.portdict[net]["sink"] = pads[1]
-            pass
 
     def on_add(self, event: Any) -> None:
         all = self.net_list.GetStrings()
@@ -95,12 +100,7 @@ class NetPanel(wx.Panel):
         for item in selections:
             new.append(all[item])
         
-        def find_index(layer: str) -> int:
-            for i, entry in enumerate(self.np_dict.keys()):
-                if entry == layer:
-                    return i
-            return -1
-        new.sort(key=find_index)
+        new.sort(key=self.nets.index)
         self.net_list.Set(new)
         
         for item in reversed(selections):
@@ -120,11 +120,13 @@ class NetPanel(wx.Panel):
         all = self.plot_list.GetStrings()
         net = all[sel].removesuffix(warn)
         port = self.portdict[net]
+        gcm = GuiCircuitModel.get_instance()
+        pads = gcm.get_pads_in_net(net)
         self.combo_source.Enable()
-        self.combo_source.SetItems(self.np_dict[net])
+        self.combo_source.SetItems(pads)
         self.combo_source.SetValue(port["source"])
         self.combo_sink.Enable()
-        self.combo_sink.SetItems(self.np_dict[net])
+        self.combo_sink.SetItems(pads)
         self.combo_sink.SetValue(port["sink"])
         self.swap_button.Enable()
         evt = wx.CommandEvent(wx.EVT_COMBOBOX.typeId, self.plot_list.GetId())

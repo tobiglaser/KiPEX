@@ -1,13 +1,13 @@
 import wx
 from port_panel import PortPanel
 from sub_panel import SubPanel
+from gui_circuit_model import GuiCircuitModel
 
 
 class LoopList(wx.Panel):
-    def __init__(self, parent: wx.Window, name: str = "", components: dict[str, list[str]] = {}, pin_nets: dict[str, str] = {}) -> None:
+    def __init__(self, parent: wx.Window, name: str = "") -> None:
         super().__init__(parent)
-        self.components = components
-        self.pin_nets = pin_nets
+        gcm = GuiCircuitModel.get_instance()
         self.subpanels: list[SubPanel] = []
         self.end_net_panel: SubPanel | None = None
         self.used_nets: list[str] = []
@@ -28,25 +28,18 @@ class LoopList(wx.Panel):
         self.list = wx.BoxSizer(wx.VERTICAL)
         self.scroll.SetSizer(self.list)
         self.border_sizer.Add(self.scroll, 1, wx.EXPAND)
-        self.source_panel = PortPanel(self.scroll, "Source", components)
+        self.source_panel = PortPanel(self.scroll, "Source", gcm.get_component_pin_dict())
         self.list.Add(self.source_panel, 0, wx.EXPAND | wx.ALL, 5)
 
         self.list.AddStretchSpacer(1)
-        self.sink_panel = PortPanel(self.scroll, "Sink", components)
+        self.sink_panel = PortPanel(self.scroll, "Sink", gcm.get_component_pin_dict())
         self.list.Add(self.sink_panel, 0, wx.EXPAND | wx.LEFT | wx.BOTTOM | wx.RIGHT, 5)
 
         self.source_panel.pin_box.Bind(wx.EVT_COMBOBOX, handler=self.on_pin_selected)
         self.sink_panel.pin_box.Bind(wx.EVT_COMBOBOX, handler=self.on_pin_selected)
 
-    #Dummy for later model
-    def components_on_net(self, net: str) -> list[str]:
-        return ["A", "B"]
-    #Dummy for later model
-    def nets_on_component(self, component: str) -> list[str]:
-        return ["a", "b"]
-    #Dummy for later model
-    def mockup_options_for_components(self, components: list[str]) -> dict[str, list[str]]:
-        return {"A": ["a", "b"], "B": ["a", "b"]}
+        self.completenes_hint = wx.StaticText(self, label="Loop Open ❌")
+        self.border_sizer.Add(self.completenes_hint, 0, wx.ALIGN_CENTER | wx.LEFT | wx.BOTTOM | wx.RIGHT, 5)
 
     def on_subpanel_close(self, event: wx.Event) -> None:
         source = event.GetEventObject()
@@ -71,10 +64,12 @@ class LoopList(wx.Panel):
 
     def on_pin_selected(self, event: wx.Event) -> None:
         source = event.GetEventObject()
+        gcm = GuiCircuitModel.get_instance()
         if source == self.source_panel.pin_box:
             self.source_panel.Disable()
-            net = self.pin_nets[f"{self.source_panel.component_box.GetValue()}-{self.source_panel.pin_box.GetValue()}"]
+            net = gcm.get_net_of_component_pin(self.source_panel.component_box.GetValue(), self.source_panel.pin_box.GetValue())
             net_panel = SubPanel(self.scroll, "Net")
+            net_panel.combobox.SetItems([net])
             net_panel.combobox.SetValue(net)
             self.used_nets.append(net)
             net_panel.close_button.Bind(wx.EVT_BUTTON, self.on_subpanel_close)
@@ -83,8 +78,9 @@ class LoopList(wx.Panel):
             self.list.Insert(1, net_panel, 0, wx.EXPAND | wx.ALL, 5)
             self.Layout()
             net_panel.Disable()
-            components = self.components_on_net(net)
-            comp_panel = SubPanel(self.scroll, "Component", components, self.mockup_options_for_components(components))
+            gcm = GuiCircuitModel.get_instance()
+            components = gcm.get_components_in_net(net)
+            comp_panel = SubPanel(self.scroll, "Component", components, gcm.get_mockup_options_for_components(components))
             comp_panel.close_button.Bind(wx.EVT_BUTTON, self.on_subpanel_close)
             comp_panel.combobox.Bind(wx.EVT_COMBOBOX, self.on_sub_selection)
             self.subpanels.append(comp_panel)
@@ -124,39 +120,36 @@ class LoopList(wx.Panel):
         new_subpanel = None
 
         if subpanel.combobox2: # is component
-            nets = self.nets_on_component(subpanel.combobox.GetValue())
+            gcm = GuiCircuitModel.get_instance()
+            nets = gcm.get_nets_on_component(subpanel.combobox.GetValue())
             for net in self.used_nets:
                 if net in nets:
                     nets.remove(net)
             new_subpanel = SubPanel(self.scroll, "Net", nets)
         else:
-            components = self.components_on_net(subpanel.combobox.GetValue())
-            new_subpanel = SubPanel(self.scroll, "Component", components, self.mockup_options_for_components(components))
+            gcm = GuiCircuitModel.get_instance()
+            components = gcm.get_components_in_net(subpanel.combobox.GetValue())
+            gcm = GuiCircuitModel.get_instance()
+            new_subpanel = SubPanel(self.scroll, "Component", components, gcm.get_mockup_options_for_components(components))
 
         new_subpanel.combobox.Bind(wx.EVT_COMBOBOX, self.on_sub_selection)
         new_subpanel.close_button.Bind(wx.EVT_BUTTON, self.on_subpanel_close)
         self.subpanels.append(new_subpanel)
         self.list.Insert(source_index + 1, new_subpanel, 0, wx.EXPAND | wx.ALL, 5)
-        print(source_index)
         self.Layout()
-
-
-        #for i, item in enumerate(self.list.GetChildren()):
-        #    print(i, item)
-            
-        
-        
 
 
 
 
 if __name__ == "__main__":
+    from kipy import KiCad
+    GuiCircuitModel.from_KiCad(KiCad().get_board())
     app = wx.App()
     frame = wx.Frame(None)
     sw = wx.Panel(frame)
     bs = wx.BoxSizer(wx.HORIZONTAL)
     sw.SetSizer(bs)
-    l = LoopList(sw, "Loop 1", {"A": ["a", "aa", "aaa"], "B": ["b", "bb", "bbb"]}, {"A-aaa": "Z", "A-aa": "Y", "A-a": "X", "B-b": "Z", "B-bb": "Y", "B-bbb": "X"})
+    l = LoopList(sw, "Loop 1")
     bs.Add(l, 0, wx.ALL | wx.EXPAND, 5)
     frame.Show()
     app.MainLoop()

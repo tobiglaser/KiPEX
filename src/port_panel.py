@@ -3,9 +3,9 @@ import wx
 
 
 class PortPanel(wx.Panel):
-    def __init__(self, parent: wx.Window, text: str = "", components: dict[str, list[str]] = {}) -> None:
+    def __init__(self, parent: wx.Window, text: str = "", components_pins: dict[str, list[str]] = {}) -> None:
         super().__init__(parent)
-        self.components = components
+        self.components = components_pins
         border = wx.StaticBoxSizer(wx.HORIZONTAL, self, text)
         self.SetSizer(border)
 
@@ -18,7 +18,7 @@ class PortPanel(wx.Panel):
         fgs.Add(wx.StaticText(self, label="Component"), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
         fgs.AddSpacer(5)
         fgs.Add(wx.StaticText(self, label="Pin"), 1, wx.ALIGN_CENTER | wx.TOP | wx.RIGHT, 5)
-        self.component_box = wx.ComboBox(self, style=wx.CB_READONLY, choices=list(components.keys()))
+        self.component_box = wx.ComboBox(self, style=wx.CB_READONLY, choices=list(components_pins.keys()))
         self.component_box.Bind(wx.EVT_COMBOBOX, self.on_component_select)
         fgs.Add(self.component_box, 1, wx.EXPAND | wx.TOP | wx.LEFT | wx.BOTTOM, 5)
         fgs.AddSpacer(5)

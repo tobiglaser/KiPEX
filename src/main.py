@@ -8,7 +8,7 @@ import json
 from gui import App
 from translator import Translator
 from api_warning import api_warning
-
+from gui_circuit_model import GuiCircuitModel
 from util import ensure_fasthenry_path, ensure_settings_exist
 
 if __name__ == "__main__":
@@ -34,71 +34,32 @@ if __name__ == "__main__":
     try:
         board = KiCad().get_board()
         nets = board.get_nets()
-        pads = board.get_pads()
         fp_instances = board.get_footprints()
     except ApiError as err:
         if err.code == 7:
             api_warning()
         exit()
-    net_pad_name_dict: dict[str, list[str]] = {}
-    pads_by_id: dict[str, Pad] = {}
-    pad_id_by_name: dict[str, str] = {}
-    pad_names_by_id: dict[str, list[str]] = {}
     pad_by_name: dict[str, Pad] = {}
-    for net in nets:
-        net_pad_name_dict[net.name] = []
     for fpi in fp_instances:
         for pad in fpi.definition.pads:
             fp_name = fpi.reference_field.text.value
             if not fp_name:
                 fp_name = "None"
-            #pad_name = f"{fp_name}-{pad.number}"
-            #pad_id_by_name[pad_name] = pad.id.value
-            #pad_name_by_id[pad.id.value] = pad_name
-
             layers = pad.padstack.layers
-            pad_names_by_id[pad.id.value] = []
             if BoardLayer.BL_F_Cu in layers and BoardLayer.BL_B_Cu in layers:
                 # front and back
                 pad_name = f"{fp_name}-{pad.number} (Front)"
-                pad_id_by_name[pad_name] = pad.id.value
-                pad_names_by_id[pad.id.value].append(pad_name)
                 pad_by_name[pad_name] = pad
-                net_pad_name_dict[pad.net.name].append(pad_name)
                 pad_name = f"{fp_name}-{pad.number} (Back)"
-                pad_id_by_name[pad_name] = pad.id.value
-                pad_names_by_id[pad.id.value].append(pad_name)
-                net_pad_name_dict[pad.net.name].append(pad_name)
                 pad_by_name[pad_name] = pad
-                pass
             else:
                 pad_name = f"{fp_name}-{pad.number}"
-                pad_id_by_name[pad_name] = pad.id.value
-                if BoardLayer.BL_F_Cu in layers:
-                    layer = BoardLayer.BL_F_Cu
-                else:
-                    layer = BoardLayer.BL_B_Cu
-                pad_names_by_id[pad.id.value].append(pad_name)
-                net_pad_name_dict[pad.net.name].append(pad_name)
                 pad_by_name[pad_name] = pad
-                pass
 
-    for pad in pads:
-        pads_by_id[pad.id.value] = pad
-        print(pad)
-
-    remove = []
-    for key, value in net_pad_name_dict.items():
-        print(key, ": ", value)
-        if len(value) < 2:
-            remove.append(key)
-    for key in remove:
-        net_pad_name_dict.pop(key)
-        print("removed ", key)
+    GuiCircuitModel.from_KiCad(board)
 
     app = App(redirect=True, project_name=project_title, settings=settings)
     ensure_fasthenry_path(settings)
-    app.set_net_pads(net_pad_name_dict)
 
     translator = Translator(board, pad_by_name)
     app.set_translator(translator)
