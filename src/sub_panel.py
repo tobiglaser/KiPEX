@@ -7,13 +7,13 @@ class SubPanel(wx.Panel):
         super().__init__(parent)
         border = wx.StaticBoxSizer(wx.HORIZONTAL, self, text)
         self.SetSizer(border)
-        self.combobox = wx.ComboBox(self, style=wx.CB_READONLY, value="", choices=choices)
+        self.combobox = wx.ComboBox(self, style=wx.CB_READONLY | wx.CB_SORT, value="", choices=choices)
         border.Add(self.combobox, 1, wx.ALL | wx.EXPAND, 5)
         self.second_coices = second_choices
 
         self.combobox2 = None
         if second_choices:
-            self.combobox2 = wx.ComboBox(self, style=wx.CB_READONLY, value="")
+            self.combobox2 = wx.ComboBox(self, style=wx.CB_READONLY | wx.CB_SORT, value="")
             self.combobox.Bind(wx.EVT_COMBOBOX, self.on_component_select)
             self.combobox2.Disable()
             #if len(second_choices) == 1:

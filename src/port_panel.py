@@ -20,11 +20,11 @@ class PortPanel(wx.Panel):
         fgs.Add(wx.StaticText(self, label="Component"), 1, wx.ALIGN_CENTER | wx.TOP | wx.LEFT, 5)
         fgs.AddSpacer(5)
         fgs.Add(wx.StaticText(self, label="Pin"), 1, wx.ALIGN_CENTER | wx.TOP | wx.RIGHT, 5)
-        self.component_box = wx.ComboBox(self, style=wx.CB_READONLY, choices=list(components_pins.keys()))
+        self.component_box = wx.ComboBox(self, style=wx.CB_READONLY | wx.CB_SORT, choices=list(components_pins.keys()))
         self.component_box.Bind(wx.EVT_COMBOBOX, self.on_component_select)
         fgs.Add(self.component_box, 1, wx.EXPAND | wx.TOP | wx.LEFT | wx.BOTTOM, 5)
         fgs.AddSpacer(5)
-        self.pin_box = wx.ComboBox(self, style=wx.CB_READONLY, value="")
+        self.pin_box = wx.ComboBox(self, style=wx.CB_READONLY | wx.CB_SORT, value="")
         self.pin_box.Disable()
         fgs.Add(self.pin_box, 1, wx.EXPAND | wx.TOP | wx.RIGHT | wx.BOTTOM, 5)
 
