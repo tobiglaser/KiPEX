@@ -654,24 +654,40 @@ class Translator():
             via_nodes: list[Node] = []
             for pos in positions:
                 node = self.nodes.get(pos)
-
                 if not node:
-                    if net_nodes == None: net_nodes = [n for n in self.nodes.values() if n.net == ph.net]
-                    closest_node = None
-                    closest_distance = 1e9
-                    for node in net_nodes:
-                        if node.position.z != pos.z: continue
-                        if not closest_node: closest_node = node
-                        distance = pos.distance2D(node.position)
-                        if distance < closest_distance:
-                            closest_node = node
-                            closest_distance = distance
-                    if not closest_node: raise Exception(f"No Node found for {ph} at {pos}")
-                    self.node_index += 1
-                    node = Node(self.node_index, ph.net, pos)
-                    via_nodes.append(node)
-                    self.nodes[pos] = node
-                    self.eqivs.append(Equivalence([node, closest_node]))
+                    point = shapely.Point(pos.x, pos.y)
+                    inside = False
+                    for zone in self.copper_zones:
+                        if zone.net != ph.net: continue
+                        if self.zs[zone.layer] != pos.z: continue
+                        if point.covered_by(zone.polygon):
+                            inside = True
+                            break
+                    if not inside and pos != positions[-1] and pos != positions[0]:
+                        continue
+                    elif not inside and (pos == positions[-1] or pos == positions[0]):
+                        self.node_index += 1
+                        node = Node(self.node_index, ph.net, pos)
+                        via_nodes.append(node)
+                        self.nodes[pos] = node
+                    else:
+                        if net_nodes == None: net_nodes = [n for n in self.nodes.values() if n.net == ph.net]
+                        closest_node = None
+                        closest_distance = 1e9
+                        for node in net_nodes:
+                            if node.position.z != pos.z: continue
+                            if not closest_node: closest_node = node
+                            distance = pos.distance2D(node.position)
+                            if distance < closest_distance:
+                                closest_node = node
+                                closest_distance = distance
+                        if not closest_node:
+                            raise Exception(f"No node found for {ph} despite inside Polygon: {pos}")
+                        self.node_index += 1
+                        node = Node(self.node_index, ph.net, pos)
+                        via_nodes.append(node)
+                        self.nodes[pos] = node
+                        self.eqivs.append(Equivalence([node, closest_node]))
 
             via_conductance = ph.conductance
             #! Vastly underestimating Via resistance with solid copper conductor the size of via diameter.
