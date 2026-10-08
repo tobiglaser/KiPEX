@@ -9,7 +9,6 @@ class LoopList(wx.Panel):
         super().__init__(parent)
         gcm = GuiCircuitModel.get_instance()
         self.subpanels: list[SubPanel] = []
-        self.end_net_panel: SubPanel | None = None
         self.used_nets: list[str] = []
         self.end_net  = ""
         self.last_net = ""
@@ -68,6 +67,7 @@ class LoopList(wx.Panel):
                             wx.PostEvent(self.subpanels[-1].close_button, command_event)
                 else:
                     self.source_panel.Enable()
+                self.Layout()
 
     def on_pin_selected(self, event: wx.Event) -> None:
         source = event.GetEventObject()
@@ -111,12 +111,13 @@ class LoopList(wx.Panel):
         if self.last_net == self.end_net and self.last_net:
             self.completenes_hint.SetLabelText("Loop Closed ✅")
             self.closed = True
-            while self.subpanels[-1].combobox.GetValue() != self.end_net:
-                sp = self.subpanels[-1]
-                self.subpanels.remove(sp)
-                self.list.Detach(sp)
-                sp.Destroy()
-                self.subpanels[-1].Enable()
+            if self.subpanels:
+                while self.subpanels[-1].combobox.GetValue() != self.end_net:
+                    sp = self.subpanels[-1]
+                    self.subpanels.remove(sp)
+                    self.list.Detach(sp)
+                    sp.Destroy()
+                    self.subpanels[-1].Enable()
         else:
             self.completenes_hint.SetLabelText("Loop Open ❌")
             self.closed = False
@@ -171,6 +172,7 @@ class LoopList(wx.Panel):
         self.subpanels.append(new_subpanel)
         self.list.Insert(source_index + 1, new_subpanel, 0, wx.EXPAND | wx.ALL, 5)
         self.Layout()
+        self.scroll.Scroll(-1, self.scroll.GetScrollRange(wx.VERTICAL))
 
 
 
