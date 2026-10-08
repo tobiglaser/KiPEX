@@ -441,6 +441,7 @@ class Translator():
                 poly = poly.difference(p)
         if type(poly) is not shapely.Polygon:
             raise TypeError("this should still be a polygon", type(poly), poly)
+        shapely.prepare(poly)
         return poly
 
     def zones(self) -> None:
@@ -654,13 +655,14 @@ class Translator():
             via_nodes: list[Node] = []
             for pos in positions:
                 node = self.nodes.get(pos)
-                if not node:
-                    point = shapely.Point(pos.x, pos.y)
+                if node:
+                    via_nodes.append(node)
+                else:
                     inside = False
                     for zone in self.copper_zones:
                         if zone.net != ph.net: continue
                         if self.zs[zone.layer] != pos.z: continue
-                        if point.covered_by(zone.polygon):
+                        if shapely.contains_xy(zone.polygon, pos.x, pos.y):
                             inside = True
                             break
                     if not inside and pos != positions[-1] and pos != positions[0]:
