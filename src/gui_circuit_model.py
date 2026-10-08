@@ -32,6 +32,8 @@ class GuiCircuitModel():
     components_in_net: dict[str, set[str]]  = field(default_factory=dict, init=False)
     nets_on_component: dict[str, set[str]]  = field(default_factory=dict, init=False)
 
+    mockups_of_components: dict[str, list[MockUpOptions]] = field(default_factory=dict, init=False)
+
     #? layerID_by_layer_name
 
     @classmethod
@@ -41,7 +43,7 @@ class GuiCircuitModel():
         return cls.inst
 
     @classmethod
-    def from_KiCad(cls, board: Board) -> GuiCircuitModel:
+    def from_KiCad(cls, board: Board, mockup_layer: str = "User.1") -> GuiCircuitModel:
         inst = cls()
         try:
             nets = board.get_nets()
@@ -105,21 +107,38 @@ class GuiCircuitModel():
                     inst.nets_on_component[component].remove(net)
             print("removed ", net)
 
+        layer = None
+        for bl in BoardLayer.values():
+            board_layer_name = board.get_layer_name(bl)
+            if mockup_layer == board_layer_name:
+                layer = bl
+                break
+        if not layer: raise Exception(f"Layer {mockup_layer} not found in Project.")
+
+        for fpi in fp_instances:
+            fp_name: str = fpi.reference_field.text.value
+            options: list[MockUpOptions] = []
+            if len(fpi.definition.pads) == 2:
+                options.append(MockUpOptions.direct)
+            graphic_shapes = fpi.definition.shapes
+            for shape in graphic_shapes:
+                if layer == shape.layer:
+                    options.append(MockUpOptions.mock_up)
+                    break
+                else:
+                    continue
+            inst.mockups_of_components[fp_name] = options
 
 
         cls.inst = inst
         return inst
 
     def get_mockup_options_for_components(self, components: list[str]) -> dict[str, list[str]]:
-        #TODO
-        """ TODO
-            Check if has 2 pins -> direct, 3 pins -> middle?, more -> only mockup
-            check if has graphic elements on layer,
-            beware not text element
-        """
-        dict = {}
+        dict: dict[str, list[str]] = {}
         for c in components:
-            dict[c] = [MockUpOptions.direct.name, MockUpOptions.mock_up.name]
+            dict[c] = []
+            for option in self.mockups_of_components[c]:
+                dict[c].append(option.name)
         return dict
 
 

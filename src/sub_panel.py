@@ -34,7 +34,7 @@ class SubPanel(wx.Panel):
         self.combobox2.Enable()
         component = self.combobox.GetStringSelection()
         self.combobox2.SetItems(self.second_coices[component])
-        if len(self.second_coices) == 1:
+        if len(self.second_coices[component]) == 1:
             self.combobox2.SetSelection(0)
             command_event = wx.CommandEvent(wx.EVT_COMBOBOX.typeId)
             command_event.SetEventObject(self.combobox2)
