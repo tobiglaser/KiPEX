@@ -33,6 +33,7 @@ class CopperZone():
     polygon: shapely.Polygon
     net: str
     layer: BoardLayer.ValueType
+    nodes: set[Point3D] = field(default_factory=set, init=False)
 
 @dataclass
 class Node():
@@ -141,8 +142,11 @@ class Translator():
     eqivs: list[Equivalence] = field(default_factory=list, init=False)
     quad_upper_mm: float = 3
     quad_lower_mm: float = 0.25
+    bridge_default_height_mm: float = 0.5
+    bridge_default_thickness_mm: float = 0.2
+    bridge_default_width_mm: float = 1
     bridging_fp_layer: BoardLayer.ValueType = BoardLayer.BL_User_1
-    bridging_footprints: list[FootprintInstance] = field(init=False, default_factory=list)
+    bridging_footprints: list[tuple[FootprintInstance, MockUpOptions]] = field(init=False, default_factory=list)
 
     def reset(self) -> None:
         self.nets: list[str] = []
@@ -156,6 +160,7 @@ class Translator():
         self.element_index: int = 0
         self.copper_zones: list[CopperZone] = []
         self.eqivs: list[Equivalence] = []
+        self.bridging_footprints = []
 
     def set_frequency_range(self, fmin: float, fmax: float, ndec: int = 1) -> None:
         self.frequency = Frequencies(fmin, fmax, ndec)
@@ -202,7 +207,8 @@ class Translator():
             self.zones()
             self.traces()
             self.vias()
-            self.footprints(pad_mode)
+            self.footprints_mockup(pad_mode)
+            self.footprints_direct(pad_mode)
             self.ports()
         except ApiError as error:
             if error.code == 7:
@@ -265,19 +271,23 @@ class Translator():
         if net not in self.nets:
             self.nets.append(net)
 
-    def add_loop_footprint(self, reference: str) -> None:
+    def add_loop_footprint(self, reference: str, mode: MockUpOptions) -> None:
         fpis = self.board.get_footprints()
         for fpi in fpis:
             if reference == fpi.reference_field.text.value:
-                shapes = fpi.definition.shapes
-                polycount = 0
-                for shape in shapes:
-                    if shape.layer == self.bridging_fp_layer:
-                        if type(shape) == BoardPolygon:
-                            polycount += len(shape.polygons)
-                if polycount == 1:
-                    self.bridging_footprints.append(fpi)
+                if mode == MockUpOptions.direct:
+                    self.bridging_footprints.append((fpi, mode))
                     return
+                elif mode == MockUpOptions.mock_up:
+                    shapes = fpi.definition.shapes
+                    polycount = 0
+                    for shape in shapes:
+                        if shape.layer == self.bridging_fp_layer:
+                            if type(shape) == BoardPolygon:
+                                polycount += len(shape.polygons)
+                    if polycount == 1:
+                        self.bridging_footprints.append((fpi, mode))
+                        return
 
     def stackup(self) -> None:
         stackup = self.board.get_stackup()
@@ -444,6 +454,63 @@ class Translator():
         shapely.prepare(poly)
         return poly
 
+
+    def find_closest_node_in_zone(self, position: Point3D, zone: CopperZone) -> tuple[Node | None, float]:
+        closest_node = None
+        closest_dist = 1e9 # 1 meter
+        for pos in zone.nodes:
+            node = self.nodes[pos]
+            dist = node.position.distance2D(position)
+            if dist < closest_dist:
+                closest_node = node
+                closest_dist = dist
+        return closest_node, closest_dist
+
+    def find_connecting_zone(self, pad: Pad, side: BoardLayer.ValueType) -> CopperZone | None:
+        pad_polygon = self.board.get_pad_shapes_as_polygons(pad, side)
+        if not pad_polygon: raise
+        pad_poly = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
+        for zone in self.copper_zones:
+            if zone.polygon.intersects(pad_poly) or zone.polygon.contains(pad_poly):
+                return zone
+        return None
+
+    def pad_center(self, pad: Pad, side: BoardLayer.ValueType) -> Point3D:
+        pad_polygon = self.board.get_pad_shapes_as_polygons(pad)
+        if not pad_polygon: raise
+        pad_center = pad_polygon.bounding_box().center()
+        return Point3D(pad_center.x, pad_center.y, self.zs[side])
+
+    def find_center_most_node_in_pad(self, pad: Pad, side: BoardLayer.ValueType) -> tuple[Node | None, float]:
+        pad_polygon = self.board.get_pad_shapes_as_polygons(pad, side)
+        if not pad_polygon: raise
+        poly = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
+        inside_nodes = []
+        for pos in self.nodes.keys():
+            if shapely.contains_xy(poly, pos.x, pos.y):
+                inside_nodes.append(self.nodes[pos])
+        return self.find_closest_node(self.pad_center(pad, side), pad.net, inside_nodes)
+
+
+    def find_closest_node(self, position: Point3D, net: Net, nodes: list[Node] = []) -> tuple[Node | None, float]:
+        
+        if not nodes:
+            if node := self.nodes.get(position):
+                return node, 0
+            nodes = list(self.nodes.values())
+        
+        closest_dist = 1e9 # 1meter
+        closest_node = None
+        for node in nodes:
+            if node.net != net.name: continue
+            if node.position.z != position.z: continue
+            dist = position.distance2D(node.position)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_node = node
+        return closest_node, closest_dist
+
+
     def zones(self) -> None:
         for zone in self.board.get_zones():
             net = zone.net.name if zone.net else ""
@@ -476,6 +543,8 @@ class Translator():
                     if not self.nodes.get(side.end):
                         self.node_index += 1
                         self.nodes[side.end] = Node(self.node_index, zone.net, side.end)
+                    zone.nodes.add(side.start)
+                    zone.nodes.add(side.end)
                     if not self.nodes.get(side.middle()):
                         if not self.elements.get((side.start, side.end)) and not self.elements.get((side.end, side.start)):
                                 self.element_index += 1
@@ -487,8 +556,89 @@ class Translator():
                                     height=thickness
                                 )
 
-    def footprints(self, pad_mode: str) -> None:
-        for fp in self.bridging_footprints:
+    def get_mockup_parameters(self, footprint: FootprintInstance) -> tuple[int, int, int]:
+        """returns tuple(width, height, thickness)"""
+        height = None
+        thickness = None
+        width = None
+        for field in footprint.texts_and_fields:
+            name = getattr(field, "name", "")
+            if name == "KiPEX_Height_mm": # we know that .text is populated here
+                height = float(field.text.value.replace(',', '.')) # type: ignore
+            if name == "KiPEX_Width_mm":
+                width = float(field.text.value.replace(',', '.')) # type: ignore
+            if name == "KiPEX_Thickness_mm":
+                thickness = float(field.text.value.replace(',', '.')) # type: ignore
+        if not height:
+            height = self.bridge_default_height_mm
+        if not thickness:
+            thickness = self.bridge_default_thickness_mm
+        if not width:
+            width = self.bridge_default_width_mm
+        return from_mm(width), from_mm(height), from_mm(thickness)
+
+    def find_node_for_bridging(self, pad: Pad, side: BoardLayer.ValueType, pad_mode: str) -> Node:
+        pos = Point3D(pad.position.x, pad.position.y, self.zs[side])
+        node = None
+        if zone := self.find_connecting_zone(pad, side):
+            closest_node, distance = self.find_closest_node_in_zone(pos, zone)
+            if not closest_node: raise
+            if pad_mode == "inside":
+                poly = self.board.get_pad_shapes_as_polygons(pad)
+                if not poly: raise
+                poly = self.polygon_kicad_to_shapely(poly)
+                inside = shapely.contains_xy(poly, float(closest_node.position.x), float(closest_node.position.y))
+                if not inside: raise Exception("No available node inside Pad", pad)
+            node = closest_node
+        else:
+            most_center_node, distance = self.find_center_most_node_in_pad(pad, side)
+            if not most_center_node: raise Exception("No available node inside Pad", pad)
+            node = most_center_node
+        return node
+
+
+    def footprints_direct(self, pad_mode: str) -> None:
+        for fp, mode in self.bridging_footprints:
+            if mode != MockUpOptions.direct: continue 
+            if len(fp.definition.pads) != 2: raise
+            
+            width, height, thickness = self.get_mockup_parameters(fp)
+
+            if fp.layer == BoardLayer.BL_F_Cu:
+                height = -height
+            
+            start_pad = fp.definition.pads[0]
+            start_pos = Point3D(start_pad.position.x, start_pad.position.y, self.zs[fp.layer])
+            start_node = self.find_node_for_bridging(start_pad, fp.layer, pad_mode)
+            end_pad = fp.definition.pads[1]
+            end_pos = Point3D(end_pad.position.x, end_pad.position.y, self.zs[fp.layer])
+            end_node = self.find_node_for_bridging(end_pad, fp.layer, pad_mode)
+            # go up
+            up_pos = Point3D(start_pos.x, start_pos.y, start_pos.z + height)
+            self.node_index += 1
+            up_node = Node(self.node_index, "Bridge", up_pos)
+            self.nodes[up_pos] = up_node
+            self.element_index += 1
+            up_element = Element(self.element_index, start_node, up_node, width, thickness)
+            self.elements[start_node.position, up_pos] = up_element
+            # go over
+            over_pos = Point3D(end_pos.x, end_pos.y, end_pos.z + height)
+            self.node_index += 1
+            over_node = Node(self.node_index, "Bridge", over_pos)
+            self.nodes[over_pos] = over_node
+            self.element_index += 1
+            over_element = Element(self.element_index, up_node, over_node, width, thickness)
+            self.elements[up_pos, over_pos] = over_element
+            #go down
+            self.element_index += 1
+            down_element = Element(self.element_index, over_node, end_node, width, thickness)
+            self.elements[over_pos, end_pos] = down_element
+
+
+
+    def footprints_mockup(self, pad_mode: str) -> None:
+        for fp, mode in self.bridging_footprints:
+            if mode != MockUpOptions.mock_up: continue
             bridge_poly = None
             for shape in fp.definition.shapes:
                 if shape.layer == self.bridging_fp_layer and type(shape) == BoardPolygon:
@@ -506,13 +656,7 @@ class Translator():
                 if bridge_poly.intersects(pad_poly) and (not self.nets or pad.net.name in self.nets):
                     pads.append(pad)
             
-            for field in fp.texts_and_fields:
-                name = getattr(field, "name", "")
-                if name == "KiPEX_Height_mm": # we know that .text is populated here
-                    height = float(field.text.value.replace(',', '.')) # type: ignore
-                if name == "KiPEX_Thickness_mm":
-                    thickness = float(field.text.value.replace(',', '.')) # type: ignore
-            if not height or not thickness: raise
+            width, height, thickness = self.get_mockup_parameters(fp)
             
             xmin, ymin, xmax, ymax = map(int, bridge_poly.bounds)
             quadtree = Quad(xmin, ymin, xmax, ymax, bridge_poly, None, 0)
@@ -525,10 +669,10 @@ class Translator():
 
             z_bridge = self.zs[side]
             if side == BoardLayer.BL_F_Cu:
-                z_bridge -= from_mm(height)
+                z_bridge -= height
             else:
-                z_bridge += from_mm(height)
-            thickness = from_mm(thickness)
+                z_bridge += height
+            thickness = thickness
             for leaf in leaves:
                 sides = leaf.to_inside_sides(z_bridge)
                 for side in sides:
@@ -780,8 +924,8 @@ if __name__ == "__main__":
     translator.add_net("Net-(U1-DRAIN_1)")
     translator.add_net("Net-(SW1-Pin_1)")
     translator.add_net("GND")
-    translator.add_loop_footprint("U1")
-    translator.add_loop_footprint("U2")
+    translator.add_loop_footprint("U1", MockUpOptions.mock_up)
+    translator.add_loop_footprint("U2", MockUpOptions.mock_up)
     translator.add_port_from_pads(start_pad, layer, end_pad, layer, "C9")
     translator.set_quad_limits(3, 1)
     translator.set_footprint_quad_limits(3, 1)
