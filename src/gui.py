@@ -1,15 +1,13 @@
 import wx
-from math import ceil
 from os import path
 import traceback
-from typing import Callable
 from net_panel import NetPanel
 from loop_panel import LoopPanel
 from config_panel import ConfigPanel
 from results_panel import ResultsPanel
 from fh_runner import Executer
 from fh_config import FHConfigDialog
-from translator import Translator
+from translator import Translator, MockUpOptions
 from z_mat import Z_mat
 from engineering_notation import EngUnit
 from version import build_version
@@ -62,7 +60,7 @@ class App(wx.App):
         net_page.SetSizer(net_sizer)
         self.net_panel = NetPanel(net_page)
         net_sizer.Add(self.net_panel, 10, wx.EXPAND | wx.ALL, 10)
-        self.net_config_panel = ConfigPanel(net_page, self.settings, self.project_name, self.on_run_fh, self.on_generate)
+        self.net_config_panel = ConfigPanel(net_page, self.settings, self.project_name, self.on_run_fh, lambda: self.on_generate("net"))
         net_sizer.Add(self.net_config_panel, 0, wx.EXPAND | wx.ALL, 10)
         self.notebook.AddPage(net_page, "From Nets", True)
 
@@ -71,7 +69,7 @@ class App(wx.App):
         loop_page.SetSizer(loop_sizer)
         self.loop_panel = LoopPanel(loop_page)
         loop_sizer.Add(self.loop_panel, 10, wx.EXPAND | wx.ALL, 10)
-        self.loop_config_panel = ConfigPanel(loop_page, self.settings, self.project_name, lambda: self.log_area.AppendText("Click Dummy!\n"), lambda: self.log_area.AppendText("Click Dummy!\n"))
+        self.loop_config_panel = ConfigPanel(loop_page, self.settings, self.project_name, self.on_run_fh, lambda: self.on_generate("loop"))
         loop_sizer.Add(self.loop_config_panel, 0, wx.EXPAND | wx.ALL, 10)
         self.notebook.AddPage(loop_page, "Loop Mode", False)
 
@@ -121,16 +119,44 @@ class App(wx.App):
         else:
             self.fh_runner.kill_FH()
 
-    def on_generate(self) -> None:
+    def on_generate(self, origin: str) -> None:
         self.translator.reset()
-        nets = self.net_panel.plot_list.GetStrings()
-        for net in nets:
-            if "⚠️" in net:
-                mb = wx.MessageBox(f'Ensure distinct Ports in net "{net.removesuffix(" ⚠️")}".', "⚠️", wx.OK | wx.CENTER, self.frame)
-                return
-            source = self.net_panel.portdict[net]["source"]
-            sink   = self.net_panel.portdict[net]["sink"]
-            self.translator.add_port_from_netpanel(source, sink, net)
+        if origin == "net":
+            nets = self.net_panel.plot_list.GetStrings()
+            for net in nets:
+                if "⚠️" in net:
+                    mb = wx.MessageBox(f'Ensure distinct Ports in net "{net.removesuffix(" ⚠️")}".', "⚠️", wx.OK | wx.CENTER, self.frame)
+                    return
+                source = self.net_panel.portdict[net]["source"]
+                sink   = self.net_panel.portdict[net]["sink"]
+                self.translator.add_port_from_netpanel(source, sink, net)
+
+        elif origin == "loop":
+            used_nets: list[str] = []
+            for loop_list in self.loop_panel.loop_lists:
+                name = loop_list.name_field.GetValue()
+                source_component = loop_list.source_panel.component_box.GetValue()
+                source_pin = loop_list.source_panel.pin_box.GetValue()
+                source_pad = f"{source_component}-{source_pin}"
+                
+                sink_component = loop_list.sink_panel.component_box.GetValue()
+                sink_pin = loop_list.sink_panel.pin_box.GetValue()
+                sink_pad = f"{sink_component}-{sink_pin}"
+                self.translator.add_port_from_netpanel(source_pad, sink_pad, name)
+
+                for subpanel in loop_list.subpanels:
+                    if subpanel.combobox2:
+                        component = subpanel.combobox.GetValue()
+                        mode = subpanel.combobox2.GetValue()
+                        mode = MockUpOptions[mode]
+                        self.translator.add_loop_footprint(component, mode)
+                    else:
+                        net = subpanel.combobox.GetValue()
+                        if net in used_nets:
+                            raise Exception("Any net can occur only once.")
+                        else:
+                            used_nets.append(net)
+                            self.translator.add_net(net)
         
         self.log_area.AppendText("Generating...\n")
         self.net_config_panel.run_button.Disable()
@@ -138,8 +164,13 @@ class App(wx.App):
         
         self.translator.set_frequency_range(self.settings["freqs"]["min"], self.settings["freqs"]["max"], self.settings["freqs"]["ndec"])
         self.translator.set_quad_limits(self.settings["quad_split"]["upper"], self.settings["quad_split"]["lower"])
+        self.translator.set_footprint_quad_limits(self.settings["quad_split"]["upper"], self.settings["quad_split"]["lower"])
         try:
-            error_str = self.translator.translate()
+            error_str = ""
+            if origin == "net":
+                error_str = self.translator.translate()
+            elif origin == "loop":
+                error_str = self.translator.translate_loop("closest")
             if self.settings["visualize"]:
                 Visualizer(self.translator).visualize()
         except:
