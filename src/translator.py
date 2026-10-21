@@ -292,14 +292,22 @@ class Translator():
     def stackup(self) -> None:
         stackup = self.board.get_stackup()
         z = 0
+        # not knowing the full board height,
+        # decend down from top layer preserving orientation,
+        # but going into negative space
         for layer in stackup.layers:
             thickness = layer.thickness
             if layer.material_name == "copper":
                 self.copper_thicknesses[layer.layer] = thickness
-                self.zs[layer.layer] = z + (thickness // 2)
-                z += thickness
+                self.zs[layer.layer] = z - (thickness // 2)
+                z -= thickness
             if layer.layer == BoardLayer.BL_UNDEFINED:
-                z += thickness
+                z -= thickness
+        # z is now at the bottom of the board
+        # use it to lift zs into positive space
+        offset = abs(z)
+        for layer, neg_z in self.zs.items():
+            self.zs[layer] = neg_z + offset
 
     def is_two_layer(self) -> bool:
         return len(self.copper_thicknesses) == 2
