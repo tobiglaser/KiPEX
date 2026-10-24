@@ -70,10 +70,7 @@ class Element():
 
 @dataclass
 class PreliminaryPort():
-    start_pad: Pad
-    start_layer: BoardLayer.ValueType
-    end_pad: Pad
-    end_layer: BoardLayer.ValueType
+    pads: tuple[tuple[Pad, BoardLayer.ValueType], tuple[Pad, BoardLayer.ValueType]]
     name: str
 
 @dataclass
@@ -265,7 +262,7 @@ class Translator():
             self.add_net(start_pad.net.name)
         if not end_pad.net.name in self.nets:
             self.add_net(end_pad.net.name)
-        self.preliminary_ports.append(PreliminaryPort(start_pad, start_layer, end_pad, end_layer, name))
+        self.preliminary_ports.append(PreliminaryPort(((start_pad, start_layer), (end_pad, end_layer)), name))
     
     def add_net(self, net: str) -> None:
         if net not in self.nets:
@@ -479,13 +476,14 @@ class Translator():
         if not pad_polygon: raise
         pad_poly = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
         for zone in self.copper_zones:
+            if not zone.layer == side: continue
             if zone.polygon.intersects(pad_poly) or zone.polygon.contains(pad_poly):
                 return zone
         return None
 
     def pad_center(self, pad: Pad, side: BoardLayer.ValueType) -> Point3D:
         pad_polygon = self.board.get_pad_shapes_as_polygons(pad)
-        if not pad_polygon: raise
+        if not pad_polygon: raise Exception("No pad polygon found.", pad)
         pad_center = pad_polygon.bounding_box().center()
         return Point3D(pad_center.x, pad_center.y, self.zs[side])
 
@@ -858,54 +856,26 @@ class Translator():
 
     def ports(self) -> None:
         for pre_port in self.preliminary_ports:
-            # start
-            net = pre_port.start_pad.net.name
-            z = self.zs[pre_port.start_layer]
-            pad_polygon = self.board.get_pad_shapes_as_polygons(pre_port.start_pad, pre_port.start_layer)
-            if not pad_polygon:
-                raise Exception("No pad polygon found.", pre_port.start_pad)
-            center = pad_polygon.bounding_box().center()
-            center = Point3D(center.x, center.y, z)
-            if self.nodes.get(Point3D(center.x, center.y, z)):
-                start_node = self.nodes[Point3D(center.x, center.y, z)]
-            else:
-                polygon = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
-                inside_points = [position for position, node in self.nodes.items() if node.net == net and position.inside(polygon) and position.z == z]
-                if not inside_points:
-                    raise Exception("No available point inside Pad", pre_port.start_pad)
-                closest_point = inside_points[0]
-                closest_distance = 1e9
-                for point in inside_points:
-                    distance = center.distance2D(point)
-                    if distance < closest_distance:
-                        closest_point = point
-                        closest_distance = distance
-                start_node = self.nodes[closest_point]
-            # end
-            net = pre_port.end_pad.net.name
-            z = self.zs[pre_port.end_layer]
-            pad_polygon = self.board.get_pad_shapes_as_polygons(pre_port.end_pad, pre_port.end_layer)
-            if not pad_polygon:
-                raise Exception("No pad polygon found.", pre_port.end_pad)
-            center = pad_polygon.bounding_box().center()
-            center = Point3D(center.x, center.y, z)
-            if self.nodes.get(Point3D(center.x, center.y, z)):
-                end_node = self.nodes[Point3D(center.x, center.y, z)]
-            else:
-                polygon = self.polygon_kicad_to_shapely(pad_polygon, create_holes=False)
-                inside_points = [position for position, node in self.nodes.items() if node.net == net and position.inside(polygon) and position.z == z]
-                if not inside_points:
-                    raise Exception("No available point inside Pad", pre_port.end_pad)
-                closest_point = inside_points[0]
-                closest_distance = 1e9
-                for point in inside_points:
-                    distance = center.distance2D(point)
-                    if distance < closest_distance:
-                        closest_point = point
-                        closest_distance = distance
-                end_node = self.nodes[closest_point]
-            
-            port = Port(start_node, end_node, pre_port.name)
+            nodes: list[Node] = []
+            for pad, layer in pre_port.pads:
+                z = self.zs[layer]
+                center = self.pad_center(pad, layer)
+                center = Point3D(center.x, center.y, z)
+                if self.nodes.get(center):
+                    nodes.append(self.nodes[center])
+                elif zone := self.find_connecting_zone(pad, layer):
+                    most_center_node, dist = self.find_closest_node_in_zone(center, zone)
+                    if not most_center_node:
+                        raise Exception(f"No node found for {pad} despite inside Polygon: {center}")
+                    nodes.append(most_center_node)
+                else:
+                    center_node_inside, dist = self.find_center_most_node_in_pad(pad, layer)
+                    if not center_node_inside:
+                        raise Exception(f"No node found inside {pad}")
+                    nodes.append(center_node_inside)
+
+            name = pre_port.name.replace(" ", "_")
+            port = Port(nodes[0], nodes[1], name)
             self.processed_ports.append(port)
 
         pass
