@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TextIO
 from math import ceil
+import numpy as np
 from kipy import KiCad
 from kipy.errors import ApiError
 from kipy.board import Board
@@ -57,15 +58,17 @@ class Element():
     w_ratio: int = 2
     h_ratio: int = 2
     sigma: float | None = None # 1/(mm*Ohm)
+    w_direction: tuple[float, float, float] | None = None
     def __str__(self) -> str:
         return f"E{self.index}"
     def to_line(self) -> str:
         extra = ""
+        if self.sigma: extra += f" sigma={self.sigma}"
+        if self.w_direction: x, y, z = self.w_direction; extra += f" wx={x} wy={y} wz={z}"
         if self.nwinc != 1: extra += f" nwinc={self.nwinc}"
         if self.nhinc != 1: extra += f" nhinc={self.nhinc}"
         if self.w_ratio != 2: extra += f" rw={self.w_ratio}"
         if self.h_ratio != 2: extra += f" rh={self.h_ratio}"
-        if self.sigma: extra += f" sigma={self.sigma}"
         return f"E{self.index} {self.start} {self.end} w={to_mm(self.width)} h={to_mm(self.height)}{extra}\n"
 
 @dataclass
@@ -619,13 +622,21 @@ class Translator():
             end_pad = fp.definition.pads[1]
             end_pos = Point3D(end_pad.position.x, end_pad.position.y, self.zs[fp.layer])
             end_node = self.find_node_for_bridging(end_pad, fp.layer, pad_mode)
+            
+            start = np.array([start_pos.x, start_pos.y, start_pos.z])
+            end = np.array([end_pos.x, end_pos.y, end_pos.z])
+            dir = (end - start) / np.linalg.norm(end - start)
+            z = np.array([0, 0, 1])
+            w_dir = np.cross(dir, z)
+            w_dir = w_dir / np.linalg.norm(w_dir)
+            w_dir = (float(w_dir[0]), float(w_dir[1]), float(w_dir[2]))
             # go up
             up_pos = Point3D(start_pos.x, start_pos.y, start_pos.z + height)
             self.node_index += 1
             up_node = Node(self.node_index, "Bridge", up_pos)
             self.nodes[up_pos] = up_node
             self.element_index += 1
-            up_element = Element(self.element_index, start_node, up_node, width, thickness)
+            up_element = Element(self.element_index, start_node, up_node, width, thickness, w_direction=w_dir)
             self.elements[start_node.position, up_pos] = up_element
             # go over
             over_pos = Point3D(end_pos.x, end_pos.y, end_pos.z + height)
@@ -637,7 +648,7 @@ class Translator():
             self.elements[up_pos, over_pos] = over_element
             #go down
             self.element_index += 1
-            down_element = Element(self.element_index, over_node, end_node, width, thickness)
+            down_element = Element(self.element_index, over_node, end_node, width, thickness, w_direction=w_dir)
             self.elements[over_pos, end_pos] = down_element
 
 
@@ -744,6 +755,14 @@ class Translator():
                     bridge_node = closest_node
                 
                 width = min(bounding_box.size.x, bounding_box.size.y)
+
+                start = np.array([pad_node.position.x, pad_node.position.y, pad_node.position.z])
+                end = np.array([bridge_node.position.x, bridge_node.position.y, bridge_node.position.z])
+                dir = (end - start) / np.linalg.norm(end - start)
+                z = np.array([0, 0, 1])
+                w_dir = np.cross(dir, z)
+                w_dir = w_dir / np.linalg.norm(w_dir)
+                w_dir = (float(w_dir[0]), float(w_dir[1]), float(w_dir[2]))
 
                 self.element_index += 1
                 element = Element(
