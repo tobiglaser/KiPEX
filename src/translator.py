@@ -610,7 +610,7 @@ class Translator():
             
             width, height, thickness = self.get_mockup_parameters(fp)
 
-            if fp.layer == BoardLayer.BL_F_Cu:
+            if fp.layer == BoardLayer.BL_B_Cu:
                 height = -height
             
             start_pad = fp.definition.pads[0]
@@ -674,7 +674,7 @@ class Translator():
             leaves = sorted(leaves, key=lambda quad: quad.depth, reverse=True)
 
             z_bridge = self.zs[side]
-            if side == BoardLayer.BL_F_Cu:
+            if side == BoardLayer.BL_B_Cu:
                 z_bridge -= height
             else:
                 z_bridge += height
