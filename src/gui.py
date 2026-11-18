@@ -208,6 +208,7 @@ class App(wx.App):
     def on_fh_state(self, running: bool, state: str = "messy") -> None:
         self.fh_running = running
         self.net_config_panel.set_fh_state(running)
+        self.loop_config_panel.set_fh_state(running)
         if (running and state == "partial") or (not running and state == "clean"):
             file = "Zc" + self.settings["fh_config"]["options"].get("-S", "")
             self.results_page.read(file + ".csv", file + ".mat")
@@ -216,10 +217,10 @@ class App(wx.App):
                 if self.notebook.GetPage(page) == self.results_page:
                     self.notebook.SetSelection(page)
                     break
-            if state=="clean" and self.net_config_panel.spice_box.GetValue():
+            if state=="clean" and self.settings["spice"]["gen_spice"]:
                 z = Z_mat(file + ".csv", file + ".mat")
-                filename = self.net_config_panel.spice_filename_box.GetValue()
-                frequency = float(EngUnit(self.net_config_panel.spice_freq_box.GetValue()))
+                filename = self.settings["spice"]["file_name"]
+                frequency = float(EngUnit(self.settings["spice"]["frequency"]))
                 if path.exists(filename):
                     mb = wx.MessageDialog(
                         self.frame,
